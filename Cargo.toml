@@ -6,8 +6,7 @@ authors = ["Ethan Archer"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/EthanWinton/aliyun-oss-rs"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "A non-official Rust SDK implementation for Alibaba Cloud OSS."
 
 [dependencies]
 base64 = "0.21.2"
