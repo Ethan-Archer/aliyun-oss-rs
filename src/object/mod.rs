@@ -2,6 +2,7 @@
 
 pub use self::append_object::AppendObject;
 pub use self::del_object::DelObject;
+pub use self::get_object_meta::GetObjectMeta;
 pub use self::get_object_tagging::GetObjectTagging;
 pub use self::get_url::GetUrl;
 #[doc(hidden)]
@@ -10,6 +11,7 @@ pub use self::put_object::PutObject;
 
 mod append_object;
 mod del_object;
+mod get_object_meta;
 mod get_object_tagging;
 mod get_url;
 mod oss_object;

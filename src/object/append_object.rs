@@ -5,7 +5,6 @@ use crate::{
     OssObject,
 };
 use futures::stream::StreamExt;
-use infer::MatcherType;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::{header, Body, Client};
 use std::collections::{HashMap, HashSet};
@@ -244,8 +243,9 @@ impl AppendObject {
     }
     /// 将内存中的数据上传到OSS
     ///
-    /// - 返回值 0 - OSS返回的Etag标识
-    /// - 返回值 1 - 开启版本控制时，OSS会返回的文件版本号
+    /// - 返回值 0 - OSS返回的position标识，下一次如果要继续追加文件，需要从此position开始
+    /// - 返回值 1 - OSS返回的CRC64结果
+    /// - 返回值 2 - 开启版本控制时，OSS会返回的文件版本号
     pub async fn send_content(
         self,
         content: &[u8],

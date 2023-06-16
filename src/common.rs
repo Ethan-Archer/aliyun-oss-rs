@@ -390,4 +390,19 @@ pub struct BucketStat {
     pub deep_cold_archive_object_count: u64,
 }
 
-// ------ put_file ------
+// ------ get_object_meta ------
+/// 文件meta信息
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ObjectMeta {
+    /// 文件大小，单位字节
+    pub content_length: Option<String>,
+    /// 用于标识一个文件的内容
+    pub e_tag: Option<String>,
+    /// 文件最后访问时间
+    pub last_access_time: Option<String>,
+    /// 文件最后修改时间
+    pub last_modified: Option<String>,
+    /// 版本id
+    pub version_id: Option<String>,
+}
