@@ -1,6 +1,6 @@
 use chrono::NaiveDateTime;
 
-use super::{del_object::DelObject, get_url::GetUrl, GetObjectTagging, PutObject};
+use super::{del_object::DelObject, get_url::GetUrl, AppendObject, GetObjectTagging, PutObject};
 use crate::OssClient;
 use std::borrow::Cow;
 
@@ -23,6 +23,10 @@ impl OssObject {
     /// 上传文件到OSS
     pub fn put_object(self) -> PutObject {
         PutObject::new(self.clone())
+    }
+    /// 获取文件的标签信息
+    pub fn append_object(self) -> AppendObject {
+        AppendObject::new(self.clone())
     }
     /// 删除文件
     pub fn del_object(self) -> DelObject {

@@ -5,23 +5,23 @@ use crate::{
     OssObject,
 };
 use futures::stream::StreamExt;
+use infer::MatcherType;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::{header, Body, Client};
 use std::collections::{HashMap, HashSet};
 use tokio::{fs::File, io::BufReader};
 use tokio_util::io::ReaderStream;
 
-/// 上传文件
+/// 追加文件
 ///
-/// 添加的Object大小不能超过 5GB
+/// 只允许对类型为Appendable的文件进行追加，通过put方法上传的文件不允许追加
 ///
-/// 默认情况下，如果已存在同名Object且对该Object有访问权限，则新添加的Object将覆盖原有的Object
+/// 追加文件时，文件的最终大小不允许超过 5GB
 ///
-/// 在开启版本控制的情况下，上传文件和删除文件的逻辑都变得复杂，建议详细阅读阿里云官方文档
-///
-/// 具体详情查阅 [阿里云官方文档](https://help.aliyun.com/document_detail/31978.html)
-pub struct PutObject {
+/// 追加文件的逻辑和限制较为复杂，建议仔细阅读 [阿里云官方文档](https://help.aliyun.com/document_detail/31978.html)
+pub struct AppendObject {
     object: OssObject,
+    position: u32,
     mime: Option<String>,
     acl: Option<Acl>,
     storage_class: Option<StorageClass>,
@@ -33,10 +33,11 @@ pub struct PutObject {
     callback: Option<Box<dyn Fn(u64, u64) + Send + Sync + 'static>>,
 }
 
-impl PutObject {
+impl AppendObject {
     pub(super) fn new(object: OssObject) -> Self {
-        PutObject {
+        AppendObject {
             object,
+            position: 0,
             mime: None,
             acl: None,
             storage_class: None,
@@ -47,6 +48,11 @@ impl PutObject {
             x_oss_tagging: HashSet::new(),
             callback: None,
         }
+    }
+    /// 设置追加内容的起点
+    pub fn set_position(mut self, position: u32) -> Self {
+        self.position = position;
+        self
     }
     /// 设置对象的mime类型
     pub fn set_mime(mut self, mime: &str) -> Self {
@@ -79,28 +85,15 @@ impl PutObject {
         self
     }
     /// 设置需要附加的metadata
-    pub fn set_meta(mut self, key: &str, value: &str) -> Result<Self, Error> {
-        if !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
-            || !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
-        {
-            return Err(Error::InvalidCharacter);
-        };
+    pub fn set_meta(mut self, key: &str, value: &str) -> Self {
         self.x_oss_meta.insert(key.to_owned(), value.to_owned());
-        Ok(self)
+        self
     }
     /// 设置tag信息
     pub fn set_tagging(mut self, key: &str, value: Option<&str>) -> Self {
         match value {
-            Some(v) => {
-                let key_encode = utf8_percent_encode(key, NON_ALPHANUMERIC);
-                let v_encode = utf8_percent_encode(v, NON_ALPHANUMERIC);
-                self.x_oss_tagging
-                    .insert(format!("{}={}", key_encode, v_encode));
-            }
-            None => {
-                let key_encode = utf8_percent_encode(key, NON_ALPHANUMERIC);
-                self.x_oss_tagging.insert(key_encode.to_string());
-            }
+            Some(v) => self.x_oss_tagging.insert(format!("{}={}", key, v)),
+            None => self.x_oss_tagging.insert(key.to_owned()),
         };
         self
     }
@@ -123,9 +116,13 @@ impl PutObject {
     ///
     /// 如果设置了上传进度的回调方法，调用者将会实时获得最新的上传进度
     ///
-    /// - 返回值 0 - OSS返回的Etag标识
-    /// - 返回值 1 - 开启版本控制时，OSS会返回的文件版本号
-    pub async fn send_file(self, file: &str) -> Result<(Option<String>, Option<String>), Error> {
+    /// - 返回值 0 - OSS返回的position标识，下一次如果要继续追加文件，需要从此position开始
+    /// - 返回值 1 - OSS返回的CRC64结果
+    /// - 返回值 2 - 开启版本控制时，OSS会返回的文件版本号
+    pub async fn send_file(
+        self,
+        file: &str,
+    ) -> Result<(Option<String>, Option<String>, Option<String>), Error> {
         //生成文件类型
         let file_type = match self.mime {
             Some(mime) => mime,
@@ -149,12 +146,14 @@ impl PutObject {
         let filename_str = utf8_percent_encode(&self.object.object, NON_ALPHANUMERIC).to_string();
         //构造url
         let url = format!(
-            "https://{}.{}/{}",
+            "https://{}.{}/{}?append",
             self.object.bucket, self.object.client.endpoint, filename_str
         );
         //构造http请求
         let mut req = Client::new()
-            .put(url)
+            .post(url)
+            //插入追加起点
+            .query(&[("position", self.position)])
             //插入content_type
             .header(header::CONTENT_TYPE, file_type)
             //插入content_length
@@ -224,14 +223,17 @@ impl PutObject {
         match status_code {
             code if code.is_success() => {
                 let headers = response.headers();
-                let e_tag = headers
-                    .get("ETag")
+                let crc64ecma = headers
+                    .get("x-oss-hash-crc64ecma")
                     .and_then(|header| header.to_str().ok().map(|s| s.to_owned()))
                     .map(|v| v.replace("\"", ""));
                 let version_id = headers
                     .get("x-oss-version-id")
                     .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
-                Ok((e_tag, version_id))
+                let next_position = headers
+                    .get("x-oss-next-append-position")
+                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
+                Ok((next_position, crc64ecma, version_id))
             }
             _ => {
                 let body = response.text().await?;
@@ -247,7 +249,7 @@ impl PutObject {
     pub async fn send_content(
         self,
         content: &[u8],
-    ) -> Result<(Option<String>, Option<String>), Error> {
+    ) -> Result<(Option<String>, Option<String>, Option<String>), Error> {
         //生成文件类型
         let content_type = self.mime.unwrap_or_else(|| match infer::get(content) {
             Some(ext) => ext.mime_type().to_owned(),
@@ -270,12 +272,14 @@ impl PutObject {
         .to_string();
         //构造请求url
         let url = format!(
-            "https://{}.{}/{}",
+            "https://{}.{}/{}?append",
             self.object.bucket, self.object.client.endpoint, filename_str
         );
         //构造http请求
         let mut req = Client::new()
-            .put(url)
+            .post(url)
+            //插入追加起点
+            .query(&[("position", self.position)])
             .header(header::CONTENT_TYPE, content_type)
             .header(header::CONTENT_LENGTH, content_size)
             .body(content.to_owned());
@@ -313,26 +317,31 @@ impl PutObject {
             req = req.header("x-oss-tagging", tagging_str);
         }
         //签名并发送请求
-        let req = req.sign(
-            &self.object.client.ak_id,
-            &self.object.client.ak_secret,
-            Some(&self.object.bucket),
-            Some(&self.object.object),
-        )?;
-        let response = req.send().await?;
+        let response = req
+            .sign(
+                &self.object.client.ak_id,
+                &self.object.client.ak_secret,
+                Some(&self.object.bucket),
+                Some(&self.object.object),
+            )?
+            .send()
+            .await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {
             code if code.is_success() => {
                 let headers = response.headers();
-                let e_tag = headers
-                    .get("ETag")
+                let crc64ecma = headers
+                    .get("x-oss-hash-crc64ecma")
                     .and_then(|header| header.to_str().ok().map(|s| s.to_owned()))
-                    .map(|v| v.replace(r#"\""#, ""));
+                    .map(|v| v.replace("\"", ""));
                 let version_id = headers
                     .get("x-oss-version-id")
                     .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
-                Ok((e_tag, version_id))
+                let next_position = headers
+                    .get("x-oss-next-append-position")
+                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
+                Ok((next_position, crc64ecma, version_id))
             }
             _ => {
                 let body = response.text().await?;

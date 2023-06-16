@@ -33,7 +33,7 @@ impl GetObjectTagging {
             self.object.bucket, self.object.client.endpoint, filename_str
         );
         //构建请求
-        let mut req = Client::new().get(url);
+        let req = Client::new().get(url);
         //发送请求
         let response = req
             .sign(
