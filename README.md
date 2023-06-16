@@ -1,3 +1,7 @@
+[![Crates.io](https://img.shields.io/crates/v/aliyun-oss-rs)](https://crates.io/crates/aliyun-oss-rs)
+[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://docs.rs/aliyun-oss-rs)
+[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/EthanWinton/aliyun-oss-rs/blob/main/LICENSE-MIT)
+
 阿里云对象存储服务（Object Storage Service，简称 OSS），是阿里云对外提供的海量、安全、低成本、高可靠的云存储服务。
 
 没有复杂的结构，仅仅为快速调用而实现，设计遵循极简、实用原则，通过 OssClient - OssBucket - OssObject 三层结构，实现了部份常用 API，目前不支持的 API 在后续会逐步增加。
@@ -12,14 +16,12 @@ let client = OssClient::new(
 "Your AccessKey Secret",
 "oss-cn-zhangjiakou.aliyuncs.com",
 );
-
 ```
 
 ##### 查询存储空间列表
 
 ```
 let buckets = client.list_buckets().set_prefix("rust").send().await;
-
 ```
 
 ##### 查询存储空间中文件列表

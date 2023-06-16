@@ -79,15 +79,28 @@ impl PutObject {
         self
     }
     /// 设置需要附加的metadata
-    pub fn set_meta(mut self, key: &str, value: &str) -> Self {
+    pub fn set_meta(mut self, key: &str, value: &str) -> Result<Self, Error> {
+        if !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+            || !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        {
+            return Err(Error::InvalidCharacter);
+        };
         self.x_oss_meta.insert(key.to_owned(), value.to_owned());
-        self
+        Ok(self)
     }
     /// 设置tag信息
     pub fn set_tagging(mut self, key: &str, value: Option<&str>) -> Self {
         match value {
-            Some(v) => self.x_oss_tagging.insert(format!("{}={}", key, v)),
-            None => self.x_oss_tagging.insert(key.to_owned()),
+            Some(v) => {
+                let key_encode = utf8_percent_encode(key, NON_ALPHANUMERIC);
+                let v_encode = utf8_percent_encode(v, NON_ALPHANUMERIC);
+                self.x_oss_tagging
+                    .insert(format!("{}={}", key_encode, v_encode));
+            }
+            None => {
+                let key_encode = utf8_percent_encode(key, NON_ALPHANUMERIC);
+                self.x_oss_tagging.insert(key_encode.to_string());
+            }
         };
         self
     }
@@ -294,15 +307,13 @@ impl PutObject {
             req = req.header("x-oss-tagging", tagging_str);
         }
         //签名并发送请求
-        let response = req
-            .sign(
-                &self.object.client.ak_id,
-                &self.object.client.ak_secret,
-                Some(&self.object.bucket),
-                Some(&self.object.object),
-            )?
-            .send()
-            .await?;
+        let req = req.sign(
+            &self.object.client.ak_id,
+            &self.object.client.ak_secret,
+            Some(&self.object.bucket),
+            Some(&self.object.object),
+        )?;
+        let response = req.send().await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {

@@ -11,7 +11,6 @@ description = "A non-official Rust SDK implementation for Alibaba Cloud OSS."
 [dependencies]
 base64 = "0.21.2"
 chrono = "0.4.25"
-dashmap = "5.4.0"
 futures = "0.3.28"
 infer = "0.13.0"
 md-5 = "0.10.5"

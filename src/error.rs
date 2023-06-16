@@ -26,4 +26,6 @@ pub enum Error {
     XmlDeserializeError(#[from] serde_xml_rs::Error),
     #[error("OSS返回了错误，HTTP状态码：{0}，错误内容：\n{1}")]
     OssError(reqwest::StatusCode, crate::common::OssErrorResponse),
+    #[error("使用了不符合要求的字符")]
+    InvalidCharacter,
 }
