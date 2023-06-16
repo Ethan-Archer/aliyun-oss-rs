@@ -5,9 +5,13 @@ use crate::{
     OssObject,
 };
 use futures::stream::StreamExt;
+use mime_guess::Mime;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::{header, Body, Client};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 use tokio::{fs::File, io::BufReader};
 use tokio_util::io::ReaderStream;
 
@@ -129,10 +133,14 @@ impl PutObject {
         //生成文件类型
         let file_type = match self.mime {
             Some(mime) => mime,
-            None => infer::get_from_path(file)?
-                .map(|val| val.mime_type())
-                .unwrap_or_else(|| "application/octet-stream")
-                .to_owned(),
+            None => match infer::get_from_path(file)? {
+                Some(ext) => ext.mime_type().to_owned(),
+                None => mime_guess::from_path(&*self.object.object)
+                    .first()
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "application/octet-stream".to_owned())
+                    .to_string(),
+            },
         };
         //打开文件
         let file = File::open(file).await?;
@@ -245,11 +253,13 @@ impl PutObject {
         content: &[u8],
     ) -> Result<(Option<String>, Option<String>), Error> {
         //生成文件类型
-        let content_type = self.mime.unwrap_or_else(|| {
-            infer::get(content)
-                .map(|val| val.mime_type())
-                .unwrap_or_else(|| "application/octet-stream")
-                .to_owned()
+        let content_type = self.mime.unwrap_or_else(|| match infer::get(content) {
+            Some(ext) => ext.mime_type().to_owned(),
+            None => mime_guess::from_path(&*self.object.object)
+                .first()
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "application/octet-stream".to_owned())
+                .to_string(),
         });
         //读取文件大小
         let content_size = content.len() as u64;
