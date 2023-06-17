@@ -1,4 +1,4 @@
-//! 存储空间是用于存储对象（Object）的容器，所有的对象都必须隶属于某个存储空间。
+//! 存储空间是用于存储文件（Object）的容器，所有的文件都必须隶属于某个存储空间。
 
 #[doc(hidden)]
 pub use self::oss_bucket::OssBucket;

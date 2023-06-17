@@ -1,4 +1,4 @@
-use crate::{common::OssErrorResponse, sign::SignRequest, Error, OssObject};
+use crate::{error::normal_error, sign::SignRequest, Error, OssObject};
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::Client;
 
@@ -78,11 +78,7 @@ impl DelObject {
                     .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
                 Ok((delete_marker, version_id))
             }
-            _ => {
-                let response_text = response.text().await?;
-                let error_info: OssErrorResponse = serde_xml_rs::from_str(&response_text)?;
-                Err(Error::OssError(status_code, error_info))
-            }
+            _ => Err(normal_error(response).await),
         }
     }
 }

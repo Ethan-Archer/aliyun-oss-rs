@@ -7,7 +7,7 @@ use super::{
 use crate::OssClient;
 use std::borrow::Cow;
 
-/// OSS对象，实现了上传文件、删除文件等API
+/// OSS文件，实现了上传文件、删除文件等API
 #[derive(Debug, Clone)]
 pub struct OssObject {
     pub(crate) client: OssClient,

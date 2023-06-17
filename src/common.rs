@@ -119,55 +119,13 @@ impl fmt::Display for ContentDisposition {
     }
 }
 
-/// OSS接口错误返回
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
-pub struct OssErrorResponse {
-    code: String,
-    message: String,
-    request_id: String,
-    #[serde(rename = "EC")]
-    ec: String,
-    host_id: String,
-}
-impl fmt::Display for OssErrorResponse {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "  Code: {}\n  Message: {}\n  Request ID: {}\n  EC: {}\n  Host ID: {}",
-            self.code, self.message, self.request_id, self.ec, self.host_id
-        )
-    }
-}
-
-/// OSS接口一般返回
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
-pub struct OssNormalResponse {
-    code: String,
-    message: String,
-    request_id: String,
-    #[serde(rename = "EC")]
-    ec: String,
-    host_id: String,
-}
-impl fmt::Display for OssNormalResponse {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "  Code: {}\n  Message: {}\n  Request ID: {}\n  EC: {}\n  Host ID: {}",
-            self.code, self.message, self.request_id, self.ec, self.host_id
-        )
-    }
-}
-
 // -------------------------- OSS API 返回的XML结构 --------------------------
 
 // ------ list_buckets ------
 /// Bucket基础信息
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct BucketInfo {
+pub struct BucketBase {
     /// Bucket名称
     pub name: String,
     /// 所在地域
@@ -182,13 +140,12 @@ pub struct BucketInfo {
     pub storage_class: StorageClass,
 }
 
-#[doc(hidden)]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct Buckets {
-    pub bucket: Vec<BucketInfo>,
+    pub bucket: Vec<BucketBase>,
 }
-#[doc(hidden)]
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct ListAllMyBucketsResult {
@@ -224,15 +181,15 @@ pub(crate) struct ListBucketResult {
     // 列表继续请求的token
     pub next_continuation_token: Option<String>,
     // 文件列表
-    pub contents: Option<Vec<Object>>,
+    pub contents: Option<Vec<ObjectInfo>>,
     // 分组列表
     pub common_prefixes: Option<Vec<CommonPrefixes>>,
 }
 
-/// Object对象信息
+/// Object文件信息
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct Object {
+pub struct ObjectInfo {
     /// Object路径
     pub key: String,
     /// Object最后修改时间
@@ -274,13 +231,13 @@ pub struct CommonPrefixes {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct BucketList {
-    pub bucket: Bucket,
+    pub bucket: BucketInfo,
 }
 
 /// 存储空间详细信息
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct Bucket {
+pub struct BucketInfo {
     /// 访问跟踪状态
     pub access_monitor: String,
     /// 备注信息
@@ -348,7 +305,7 @@ pub struct BucketPolicy {
 pub struct BucketStat {
     /// 总存储容量，单位字节
     pub storage: u64,
-    /// 总对象数量
+    /// 总文件数量
     pub object_count: u64,
     /// 已经初始化但还未完成（Complete）或者还未中止（Abort）的Multipart Upload数量
     pub multipart_upload_count: u64,
@@ -358,35 +315,35 @@ pub struct BucketStat {
     pub last_modified_time: u64,
     /// 标准存储类型的存储容量，单位字节
     pub standard_storage: u64,
-    /// 标准存储类型的对象数量
+    /// 标准存储类型的文件数量
     pub standard_object_count: u64,
     /// 低频存储类型的计费存储容量，单位字节
     pub infrequent_access_storage: u64,
     /// 低频存储类型的实际存储容量，单位字节
     pub infrequent_access_real_storage: u64,
-    /// 低频存储类型的对象数量
+    /// 低频存储类型的文件数量
     pub infrequent_access_object_count: u64,
     /// 归档存储类型的计费存储容量，单位字节
     pub archive_storage: u64,
     /// 归档存储类型的实际存储容量，单位字节
     pub archive_real_storage: u64,
-    /// 归档存储类型的对象数量
+    /// 归档存储类型的文件数量
     pub archive_object_count: u64,
     /// 冷归档存储类型的计费存储容量，单位字节
     pub cold_archive_storage: u64,
     /// 冷归档存储类型的实际存储容量，单位字节
     pub cold_archive_real_storage: u64,
-    /// 冷归档存储类型的对象数量
+    /// 冷归档存储类型的文件数量
     pub cold_archive_object_count: u64,
     /// 预留空间使用容量
     pub reserved_capacity_storage: u64,
-    /// 预留空间使用的对象数量
+    /// 预留空间使用的文件数量
     pub reserved_capacity_object_count: u64,
     /// 深度冷归档存储类型的计费存储容量，单位字节
     pub deep_cold_archive_storage: u64,
     /// 深度冷归档存储类型的实际存储容量，单位字节
     pub deep_cold_archive_real_storage: u64,
-    /// 深度冷归档存储类型的对象数量
+    /// 深度冷归档存储类型的文件数量
     pub deep_cold_archive_object_count: u64,
 }
 
@@ -405,4 +362,27 @@ pub struct ObjectMeta {
     pub last_modified: Option<String>,
     /// 版本id
     pub version_id: Option<String>,
+}
+
+// ------ get_object_tagging ------
+#[derive(Debug, Deserialize)]
+#[serde(rename = "Tagging")]
+pub(crate) struct Tagging {
+    #[serde(rename = "TagSet")]
+    pub tag_set: TagSet,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct TagSet {
+    #[serde(rename = "Tag")]
+    pub tags: Vec<Tag>,
+}
+
+#[derive(Debug, Deserialize)]
+/// 标签信息
+pub struct Tag {
+    #[serde(rename = "Key")]
+    pub key: String,
+    #[serde(rename = "Value")]
+    pub value: String,
 }

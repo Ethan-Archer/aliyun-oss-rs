@@ -110,9 +110,6 @@ impl GetUrl {
         //组装url
         param.push_str("&Signature=");
         param.push_str(&sign_str);
-        //urlencode
-        //let object_encode = utf8_percent_encode(&self.object.object, NON_ALPHANUMERIC).to_string();
-        //let param_encode = utf8_percent_encode(&param, NON_ALPHANUMERIC).to_string();
         let url = format!(
             "https://{}.{}/{}?{}",
             self.object.bucket, self.object.client.endpoint, self.object.object, param

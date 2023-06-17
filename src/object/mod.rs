@@ -1,4 +1,4 @@
-//! 对象是 OSS 存储数据的基本单元，对象由元信息、用户数据和文件名（Key）组成，对象由存储空间内部唯一的Key来标识。
+//! 文件是 OSS 存储数据的基本单元，文件由元信息、用户数据和文件名（Key）组成，文件由存储空间内部唯一的Key来标识。
 
 pub use self::append_object::AppendObject;
 pub use self::del_object::DelObject;

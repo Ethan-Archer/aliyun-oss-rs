@@ -1,4 +1,4 @@
-use crate::{common::OssErrorResponse, sign::SignRequest, Error, OssBucket};
+use crate::{error::normal_error, sign::SignRequest, Error, OssBucket};
 use reqwest::Client;
 
 /// 删除某个存储空间
@@ -35,11 +35,7 @@ impl DelBucket {
         let status_code = response.status();
         match status_code {
             code if code.is_success() => Ok(()),
-            _ => {
-                let body = response.text().await?;
-                let error_info: OssErrorResponse = serde_xml_rs::from_str(&body)?;
-                Err(Error::OssError(status_code, error_info))
-            }
+            _ => Err(normal_error(response).await),
         }
     }
 }

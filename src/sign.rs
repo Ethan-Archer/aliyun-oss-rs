@@ -97,10 +97,10 @@ impl SignRequest for RequestBuilder {
         for (name, value) in headers.iter() {
             // 检查头部名称是否以 "x-oss-" 开头
             if name.as_str().starts_with("x-oss-") {
-                let value_str = value.to_str()?;
+                let value_str = value.to_str().unwrap();
                 x_oss_headers.insert(name.as_str().to_owned(), value_str.to_owned());
             } else if name.as_str().starts_with("response-") {
-                let value_str = value.to_str()?;
+                let value_str = value.to_str().unwrap();
                 sub_resource.insert(format!("{}={}", name.as_str(), value_str));
             }
         }

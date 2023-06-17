@@ -1,14 +1,15 @@
 use crate::{
-    common::{CommonPrefixes, ListBucketResult, Object, OssErrorResponse},
+    common::{CommonPrefixes, ListBucketResult, ObjectInfo},
+    error::normal_error,
     sign::SignRequest,
     Error, OssBucket,
 };
 use reqwest::Client;
 use std::cmp;
 
-/// 列举存储空间中所有对象的信息
+/// 列举存储空间中所有文件的信息
 ///
-/// 默认获取前1000条对象信息，如果需要更多，请设置max_objects
+/// 默认获取前1000条文件信息，如果需要更多，请设置max_objects
 ///
 /// 具体详情查阅 [阿里云官方文档](https://help.aliyun.com/document_detail/187544.html)
 pub struct ListObjects {
@@ -67,9 +68,9 @@ impl ListObjects {
         self.encoding_type = Some(encoding_type.to_owned());
         self
     }
-    /// 指定返回对象的最大数量。
+    /// 指定返回文件的最大数量。
     ///
-    /// 当设置了delimiter时，此参数指的是对象和分组的总和
+    /// 当设置了delimiter时，此参数指的是文件和分组的总和
     ///
     /// 默认值：100，建议不要设置过大的数值，否则返回时间可能会比较长
     pub fn set_max_objects(mut self, max_objects: usize) -> Self {
@@ -96,7 +97,7 @@ impl ListObjects {
     ///
     pub async fn send(
         mut self,
-    ) -> Result<(Vec<Object>, Vec<CommonPrefixes>, Option<String>), Error> {
+    ) -> Result<(Vec<ObjectInfo>, Vec<CommonPrefixes>, Option<String>), Error> {
         //构造URL
         let url = format!(
             "https://{}.{}",
@@ -137,8 +138,12 @@ impl ListObjects {
             let mut total_objects = 0;
             match status_code {
                 code if code.is_success() => {
-                    let body = response.bytes().await?;
-                    let object_list: ListBucketResult = serde_xml_rs::from_reader(&*body)?;
+                    let response_bytes = response
+                        .bytes()
+                        .await
+                        .map_err(|_| Error::OssInvalidResponse(None))?;
+                    let object_list: ListBucketResult = serde_xml_rs::from_reader(&*response_bytes)
+                        .map_err(|_| Error::OssInvalidResponse(Some(response_bytes.into())))?;
                     if let Some(content) = object_list.contents {
                         let content_num = content.len();
                         contents.reserve(content_num);
@@ -153,11 +158,7 @@ impl ListObjects {
                     }
                     self.set_continuation_token(object_list.next_continuation_token);
                 }
-                _ => {
-                    let body = response.text().await?;
-                    let error_info: OssErrorResponse = serde_xml_rs::from_str(&body)?;
-                    return Err(Error::OssError(status_code, error_info));
-                }
+                _ => return Err(normal_error(response).await),
             }
             objects_left -= object_num;
             if total_objects < 1000 {

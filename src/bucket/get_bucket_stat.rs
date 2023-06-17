@@ -1,11 +1,7 @@
-use crate::{
-    common::{BucketStat, OssErrorResponse},
-    sign::SignRequest,
-    Error, OssBucket,
-};
+use crate::{common::BucketStat, error::normal_error, sign::SignRequest, Error, OssBucket};
 use reqwest::Client;
 
-/// 获取指定存储空间的存储容量以及对象数量
+/// 获取指定存储空间的存储容量以及文件数量
 ///
 /// 获取的数据并非是实时数据，延时可能超过一个小时
 ///
@@ -42,15 +38,15 @@ impl GetBucketStat {
         let status_code = response.status();
         match status_code {
             code if code.is_success() => {
-                let response_text = response.text().await?;
-                let bucket_stat: BucketStat = serde_xml_rs::from_str(&response_text)?;
+                let response_bytes = response
+                    .bytes()
+                    .await
+                    .map_err(|_| Error::OssInvalidResponse(None))?;
+                let bucket_stat: BucketStat = serde_xml_rs::from_reader(&*response_bytes)
+                    .map_err(|_| Error::OssInvalidResponse(Some(response_bytes.into())))?;
                 Ok(bucket_stat)
             }
-            _ => {
-                let response_text = response.text().await?;
-                let error_info: OssErrorResponse = serde_xml_rs::from_str(&response_text)?;
-                Err(Error::OssError(status_code, error_info))
-            }
+            _ => Err(normal_error(response).await),
         }
     }
 }

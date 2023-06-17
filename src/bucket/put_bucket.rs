@@ -1,5 +1,6 @@
 use crate::{
-    common::{Acl, DataRedundancyType, OssErrorResponse, StorageClass},
+    common::{Acl, DataRedundancyType, StorageClass},
+    error::normal_error,
     sign::SignRequest,
     Error, OssBucket,
 };
@@ -101,11 +102,7 @@ impl PutBucket {
         let status_code = response.status();
         match status_code {
             code if code.is_success() => Ok(()),
-            _ => {
-                let body = response.text().await?;
-                let error_info: OssErrorResponse = serde_xml_rs::from_str(&body)?;
-                return Err(Error::OssError(status_code, error_info));
-            }
+            _ => Err(normal_error(response).await),
         }
     }
 }

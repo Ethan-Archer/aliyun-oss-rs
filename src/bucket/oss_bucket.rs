@@ -32,7 +32,7 @@ impl OssBucket {
     pub fn del_bucket(&self) -> DelBucket {
         DelBucket::new(self.clone())
     }
-    /// 查询存储空间中全部对象信息
+    /// 查询存储空间中全部文件信息
     pub fn list_objects(&self) -> ListObjects {
         ListObjects::new(self.clone())
     }
@@ -40,7 +40,7 @@ impl OssBucket {
     pub fn get_bucket_info(&self) -> GetBucketInfo {
         GetBucketInfo::new(self.clone())
     }
-    /// 查询存储空间的存储容量和对象数量
+    /// 查询存储空间的存储容量和文件数量
     pub fn get_bucket_stat(&self) -> GetBucketStat {
         GetBucketStat::new(self.clone())
     }

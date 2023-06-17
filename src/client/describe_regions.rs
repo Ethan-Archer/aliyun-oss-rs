@@ -1,5 +1,6 @@
 use crate::{
-    common::{OssErrorResponse, RegionInfo, RegionInfoList},
+    common::{RegionInfo, RegionInfoList},
+    error::normal_error,
     sign::SignRequest,
     Error, OssClient,
 };
@@ -54,15 +55,15 @@ impl DescribeRegions {
         let status_code = response.status();
         match status_code {
             code if code.is_success() => {
-                let body = response.text().await?;
-                let regions: RegionInfoList = serde_xml_rs::from_str(&body)?;
+                let response_bytes = response
+                    .bytes()
+                    .await
+                    .map_err(|_| Error::OssInvalidResponse(None))?;
+                let regions: RegionInfoList = serde_xml_rs::from_reader(&*response_bytes)
+                    .map_err(|_| Error::OssInvalidResponse(Some(response_bytes.into())))?;
                 Ok(regions.region_info)
             }
-            _ => {
-                let body = response.text().await?;
-                let error_info: OssErrorResponse = serde_xml_rs::from_str(&body)?;
-                Err(Error::OssError(status_code, error_info))
-            }
+            _ => Err(normal_error(response).await),
         }
     }
 }

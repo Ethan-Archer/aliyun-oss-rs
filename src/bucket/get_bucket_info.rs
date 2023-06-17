@@ -1,5 +1,6 @@
 use crate::{
-    common::{Bucket, BucketList, OssErrorResponse},
+    common::{BucketInfo, BucketList},
+    error::normal_error,
     sign::SignRequest,
     Error, OssBucket,
 };
@@ -16,7 +17,7 @@ impl GetBucketInfo {
         GetBucketInfo { bucket }
     }
     /// 发送请求
-    pub async fn send(self) -> Result<Bucket, Error> {
+    pub async fn send(self) -> Result<BucketInfo, Error> {
         //构造URL
         let url = format!(
             "https://{}.{}/?bucketInfo",
@@ -37,15 +38,15 @@ impl GetBucketInfo {
         let status_code = response.status();
         match status_code {
             code if code.is_success() => {
-                let response_text = response.text().await?;
-                let bucket_info: BucketList = serde_xml_rs::from_str(&response_text)?;
+                let response_bytes = response
+                    .bytes()
+                    .await
+                    .map_err(|_| Error::OssInvalidResponse(None))?;
+                let bucket_info: BucketList = serde_xml_rs::from_reader(&*response_bytes)
+                    .map_err(|_| Error::OssInvalidResponse(Some(response_bytes.into())))?;
                 Ok(bucket_info.bucket)
             }
-            _ => {
-                let response_text = response.text().await?;
-                let error_info: OssErrorResponse = serde_xml_rs::from_str(&response_text)?;
-                Err(Error::OssError(status_code, error_info))
-            }
+            _ => Err(normal_error(response).await),
         }
     }
 }

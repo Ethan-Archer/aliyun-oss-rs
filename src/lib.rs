@@ -5,7 +5,7 @@
 //!
 //! 目前仅实现了少量常用API，后续将逐步增加其他API支持。
 //!
-//!
+//! ## 使用方法
 //! ##### 初始化
 //!  ```
 //! let client = OssClient::new(
@@ -45,6 +45,27 @@
 //! let url = object.get_url(date).build().await;
 //!
 //! ```
+//!
+//!
+//! ## OSS返回结果的处理
+//! 阿里云这套接口，是由无数人分开写，而后拼凑的，缺少统一的规范，导致返回格式乱七八糟，错误处理也很奇怪，所以处理返回结果的时候需要特别留意。
+//!
+//! 当阿里云返回成功，即2xx状态码，并且返回内容被正确解析的情况下，会正常返回，否则将返回如下错误码：
+//! ```
+//! use bytes::Bytes;
+//!
+//! #[error("OSS返回了成功，但消息体解析失败，请自行解析")]
+//! OssInvalidResponse(Option<Bytes>),
+//! #[error("OSS返回了错误，HTTP状态码：{0}，错误内容：\n{1:?}")]
+//! OssError(reqwest::StatusCode, Option<Bytes>),
+//! ```
+//!
+//! #### OssInvalidResponse(Option<Bytes>)
+//! 这个错误码代表阿里云正常返回，并且是请求成功的2xx状态，但是解析返回内容失败了，如果你需要自行解析返回内容，可以读取后面返回的Option<Bytes>，网络失败之类的情况下，可能会出现为Noned的情况
+//!
+//! #### OssError(reqwest::StatusCode, Option<Bytes>)
+//! 当阿里云返回了非2xx状态码的时候，会尝试去获取返回内容，并返回给调用者，网络失败之类的情况下，可能会出现为Noned的情况。阿里云的返回内容，绝大部分时候是未经任何编码的XM，但是有部分例外，需要留心相应的方法说明
+//!
 
 #[doc(inline)]
 pub use crate::bucket::OssBucket;

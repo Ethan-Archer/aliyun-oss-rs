@@ -1,8 +1,4 @@
-use crate::{
-    common::{ObjectMeta, OssErrorResponse},
-    sign::SignRequest,
-    Error, OssObject,
-};
+use crate::{common::ObjectMeta, sign::SignRequest, Error, OssObject};
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::Client;
 
@@ -30,6 +26,7 @@ impl GetObjectMeta {
     }
     /// 发送请求
     ///
+    /// 处理错误时请注意，oss返回的错误，错误类型`Error::OssInvalidError(StatusCode,Option<String>)`中，第二个参数的字符串部分，是经过base64编码的，所以解析的时候一定要先解码
     pub async fn send(self) -> Result<ObjectMeta, Error> {
         //对文件名进行urlencode
         let filename_str = utf8_percent_encode(&self.object.object, NON_ALPHANUMERIC).to_string();
@@ -83,9 +80,11 @@ impl GetObjectMeta {
                 })
             }
             _ => {
-                let response_text = response.text().await?;
-                let error_info: OssErrorResponse = serde_xml_rs::from_str(&response_text)?;
-                Err(Error::OssError(status_code, error_info))
+                let x_oss_error = response
+                    .headers()
+                    .get("x-oss-err")
+                    .and_then(|header| Some(header.as_bytes().to_owned()));
+                Err(Error::OssError(status_code, x_oss_error))
             }
         }
     }

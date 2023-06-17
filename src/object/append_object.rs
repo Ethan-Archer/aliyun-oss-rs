@@ -1,10 +1,10 @@
 use crate::{
-    common::{Acl, CacheControl, ContentDisposition, OssErrorResponse, StorageClass},
-    error::Error,
+    common::{Acl, CacheControl, ContentDisposition, StorageClass},
+    error::{normal_error, Error},
     sign::SignRequest,
     OssObject,
 };
-use futures::stream::StreamExt;
+use futures_util::StreamExt;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::{header, Body, Client};
 use std::collections::{HashMap, HashSet};
@@ -53,32 +53,32 @@ impl AppendObject {
         self.position = position;
         self
     }
-    /// 设置对象的mime类型
+    /// 设置文件的mime类型
     pub fn set_mime(mut self, mime: &str) -> Self {
         self.mime = Some(mime.to_owned());
         self
     }
-    /// 设置对象的访问权限
+    /// 设置文件的访问权限
     pub fn set_acl(mut self, acl: Acl) -> Self {
         self.acl = Some(acl);
         self
     }
-    /// 设置对象的存储类型
+    /// 设置文件的存储类型
     pub fn set_storage_class(mut self, storage_class: StorageClass) -> Self {
         self.storage_class = Some(storage_class);
         self
     }
-    /// 对象被下载时网页的缓存行为
+    /// 文件被下载时网页的缓存行为
     pub fn set_cache_control(mut self, cache_control: CacheControl) -> Self {
         self.cache_control = Some(cache_control);
         self
     }
-    /// 设置对象的展示形式
+    /// 设置文件的展示形式
     pub fn set_content_disposition(mut self, content_disposition: ContentDisposition) -> Self {
         self.content_disposition = Some(content_disposition);
         self
     }
-    /// 设置是否允许覆盖同名对象
+    /// 设置是否允许覆盖同名文件
     pub fn set_forbid_overwrite(mut self, forbid_overwrite: bool) -> Self {
         self.forbid_overwrite = forbid_overwrite;
         self
@@ -96,7 +96,7 @@ impl AppendObject {
         };
         self
     }
-    /// 设置对象上传进度的回调方法，此方法仅对send_file()有效
+    /// 设置文件上传进度的回调方法，此方法仅对send_file()有效
     /// ```
     /// let callback = Box::new(|uploaded_size: u64, total_size: u64| {
     ///     let percentage = if total_size == 0 {
@@ -234,11 +234,7 @@ impl AppendObject {
                     .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
                 Ok((next_position, crc64ecma, version_id))
             }
-            _ => {
-                let body = response.text().await?;
-                let error_info: OssErrorResponse = serde_xml_rs::from_str(&body)?;
-                return Err(Error::OssError(status_code, error_info));
-            }
+            _ => Err(normal_error(response).await),
         }
     }
     /// 将内存中的数据上传到OSS
@@ -343,11 +339,7 @@ impl AppendObject {
                     .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
                 Ok((next_position, crc64ecma, version_id))
             }
-            _ => {
-                let body = response.text().await?;
-                let error_info: OssErrorResponse = serde_xml_rs::from_str(&body)?;
-                return Err(Error::OssError(status_code, error_info));
-            }
+            _ => Err(normal_error(response).await),
         }
     }
 }
