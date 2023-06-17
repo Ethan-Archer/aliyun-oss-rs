@@ -68,7 +68,7 @@ impl ListBuckets {
                 ("prefix", self.prefix.as_deref()),
                 ("marker", self.marker.as_deref()),
             ])
-            .query(&("max-keys", self.max_keys));
+            .query(&[("max-keys", self.max_keys)]);
         //附加header
         if let Some(group_id) = &self.group_id {
             req = req.header("x-oss-resource-group-id", group_id.as_ref());
