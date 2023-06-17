@@ -54,16 +54,20 @@
 //! ```
 //! use bytes::Bytes;
 //!
+//! // [aliyun_oss_rs::Error](enum.Error.html) 中只有这两个错误码是请求阿里云成功之后会返回的
+//! // 其他错误都是本地或网络错误
 //! #[error("OSS返回了成功，但消息体解析失败，请自行解析")]
 //! OssInvalidResponse(Option<Bytes>),
 //! #[error("OSS返回了错误，HTTP状态码：{0}，错误内容：\n{1:?}")]
 //! OssError(reqwest::StatusCode, Option<Bytes>),
 //! ```
 //!
-//! #### OssInvalidResponse(Option<Bytes>)
-//! 这个错误码代表阿里云正常返回，并且是请求成功的2xx状态，但是解析返回内容失败了，如果你需要自行解析返回内容，可以读取后面返回的Option<Bytes>，网络失败之类的情况下，可能会出现为Noned的情况
+//! #### OssInvalidResponse
 //!
-//! #### OssError(reqwest::StatusCode, Option<Bytes>)
+//! 这个错误码代表阿里云正常返回，并且是请求成功的2xx状态，但是解析返回内容失败了，如果你需要自行解析返回内容，可以读取后面返回的`Option<Bytes>`，网络失败之类的情况下，可能会出现为Noned的情况
+//!
+//! #### OssError
+//!
 //! 当阿里云返回了非2xx状态码的时候，会尝试去获取返回内容，并返回给调用者，网络失败之类的情况下，可能会出现为Noned的情况。阿里云的返回内容，绝大部分时候是未经任何编码的XM，但是有部分例外，需要留心相应的方法说明
 //!
 

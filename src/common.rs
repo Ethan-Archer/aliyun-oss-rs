@@ -1,3 +1,6 @@
+//! 本地定义的各种数据
+//!
+//!
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use serde_derive::{Deserialize, Serialize};
 use std::fmt;
