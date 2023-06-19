@@ -41,11 +41,11 @@ impl OssClient {
 
     /// 查询所有地域的Endpoint信息
     pub fn describe_regions(&self) -> DescribeRegions {
-        DescribeRegions::new(&self)
+        DescribeRegions::new(self.clone())
     }
 
     /// 查询已创建的所有存储空间
     pub fn list_buckets(&self) -> ListBuckets {
-        ListBuckets::new(&self)
+        ListBuckets::new(self.clone())
     }
 }

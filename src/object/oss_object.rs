@@ -1,10 +1,9 @@
-use chrono::NaiveDateTime;
-
 use super::{
-    del_object::DelObject, get_url::GetUrl, AppendObject, GetObjectMeta, GetObjectTagging,
-    PutObject,
+    del_object::DelObject, get_object::GetObject, get_object_url::GetObjectUrl, AppendObject,
+    GetObjectMeta, GetObjectTagging, PutObject,
 };
 use crate::OssClient;
+use chrono::NaiveDateTime;
 use std::borrow::Cow;
 
 /// OSS文件，实现了上传文件、删除文件等API
@@ -24,27 +23,31 @@ impl OssObject {
         }
     }
     /// 上传文件到OSS
-    pub fn put_object(self) -> PutObject {
+    pub fn put_object(&self) -> PutObject {
         PutObject::new(self.clone())
     }
     /// 获取文件的标签信息
-    pub fn append_object(self) -> AppendObject {
+    pub fn append_object(&self) -> AppendObject {
         AppendObject::new(self.clone())
     }
     /// 删除文件
-    pub fn del_object(self) -> DelObject {
+    pub fn del_object(&self) -> DelObject {
         DelObject::new(self.clone())
     }
     /// 获取文件访问url
-    pub fn get_url(self, expires: NaiveDateTime) -> GetUrl {
-        GetUrl::new(self.clone(), expires)
+    pub fn get_object_url(&self, expires: NaiveDateTime) -> GetObjectUrl {
+        GetObjectUrl::new(self.clone(), expires)
     }
     /// 获取文件的标签信息
-    pub fn get_object_tagging(self) -> GetObjectTagging {
+    pub fn get_object_tagging(&self) -> GetObjectTagging {
         GetObjectTagging::new(self.clone())
     }
     /// 获取文件的meta信息
-    pub fn get_object_meta(self) -> GetObjectMeta {
+    pub fn get_object_meta(&self) -> GetObjectMeta {
         GetObjectMeta::new(self.clone())
+    }
+    /// 获取文件内容
+    pub fn get_object(&self) -> GetObject {
+        GetObject::new(self.clone())
     }
 }

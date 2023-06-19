@@ -26,9 +26,9 @@ pub struct ListBuckets {
 }
 
 impl ListBuckets {
-    pub(super) fn new(client: &OssClient) -> Self {
+    pub(super) fn new(client: OssClient) -> Self {
         ListBuckets {
-            client: client.clone(),
+            client,
             prefix: None,
             marker: None,
             max_keys: 100,
@@ -88,7 +88,7 @@ impl ListBuckets {
                     .map_err(|_| Error::OssInvalidResponse(None))?;
                 let buckets: ListAllMyBucketsResult =
                     serde_xml_rs::from_reader(&*response_bytes)
-                        .map_err(|_| Error::OssInvalidResponse(Some(response_bytes.into())))?;
+                        .map_err(|_| Error::OssInvalidResponse(Some(response_bytes)))?;
                 Ok(buckets.buckets.bucket)
             }
             _ => Err(normal_error(response).await),

@@ -1,4 +1,5 @@
 use crate::{common::ObjectMeta, sign::SignRequest, Error, OssObject};
+use bytes::Bytes;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::Client;
 
@@ -83,7 +84,7 @@ impl GetObjectMeta {
                 let x_oss_error = response
                     .headers()
                     .get("x-oss-err")
-                    .and_then(|header| Some(header.as_bytes().to_owned()));
+                    .and_then(|header| Some(Bytes::copy_from_slice(header.as_bytes())));
                 Err(Error::OssError(status_code, x_oss_error))
             }
         }

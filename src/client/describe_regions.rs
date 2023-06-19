@@ -24,9 +24,9 @@ pub struct DescribeRegions {
 }
 
 impl DescribeRegions {
-    pub(super) fn new(client: &OssClient) -> Self {
+    pub(super) fn new(client: OssClient) -> Self {
         DescribeRegions {
-            client: client.clone(),
+            client,
             regions: None,
         }
     }
@@ -60,7 +60,7 @@ impl DescribeRegions {
                     .await
                     .map_err(|_| Error::OssInvalidResponse(None))?;
                 let regions: RegionInfoList = serde_xml_rs::from_reader(&*response_bytes)
-                    .map_err(|_| Error::OssInvalidResponse(Some(response_bytes.into())))?;
+                    .map_err(|_| Error::OssInvalidResponse(Some(response_bytes)))?;
                 Ok(regions.region_info)
             }
             _ => Err(normal_error(response).await),

@@ -143,7 +143,7 @@ impl ListObjects {
                         .await
                         .map_err(|_| Error::OssInvalidResponse(None))?;
                     let object_list: ListBucketResult = serde_xml_rs::from_reader(&*response_bytes)
-                        .map_err(|_| Error::OssInvalidResponse(Some(response_bytes.into())))?;
+                        .map_err(|_| Error::OssInvalidResponse(Some(response_bytes)))?;
                     if let Some(content) = object_list.contents {
                         let content_num = content.len();
                         contents.reserve(content_num);

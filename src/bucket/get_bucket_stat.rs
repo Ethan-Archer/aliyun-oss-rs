@@ -43,7 +43,7 @@ impl GetBucketStat {
                     .await
                     .map_err(|_| Error::OssInvalidResponse(None))?;
                 let bucket_stat: BucketStat = serde_xml_rs::from_reader(&*response_bytes)
-                    .map_err(|_| Error::OssInvalidResponse(Some(response_bytes.into())))?;
+                    .map_err(|_| Error::OssInvalidResponse(Some(response_bytes)))?;
                 Ok(bucket_stat)
             }
             _ => Err(normal_error(response).await),

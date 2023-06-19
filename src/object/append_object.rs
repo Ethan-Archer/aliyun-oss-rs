@@ -5,6 +5,7 @@ use crate::{
     OssObject,
 };
 use futures_util::StreamExt;
+use mime_guess::Mime;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::{header, Body, Client};
 use std::collections::{HashMap, HashSet};
@@ -21,7 +22,7 @@ use tokio_util::io::ReaderStream;
 pub struct AppendObject {
     object: OssObject,
     position: u32,
-    mime: Option<String>,
+    mime: Option<Mime>,
     acl: Option<Acl>,
     storage_class: Option<StorageClass>,
     cache_control: Option<CacheControl>,
@@ -54,8 +55,8 @@ impl AppendObject {
         self
     }
     /// 设置文件的mime类型
-    pub fn set_mime(mut self, mime: &str) -> Self {
-        self.mime = Some(mime.to_owned());
+    pub fn set_mime(mut self, mime: Mime) -> Self {
+        self.mime = Some(mime);
         self
     }
     /// 设置文件的访问权限
@@ -124,7 +125,7 @@ impl AppendObject {
     ) -> Result<(Option<String>, Option<String>, Option<String>), Error> {
         //生成文件类型
         let file_type = match self.mime {
-            Some(mime) => mime,
+            Some(mime) => mime.to_string(),
             None => match infer::get_from_path(file)? {
                 Some(ext) => ext.mime_type().to_owned(),
                 None => mime_guess::from_path(&*self.object.object)
@@ -247,14 +248,17 @@ impl AppendObject {
         content: &[u8],
     ) -> Result<(Option<String>, Option<String>, Option<String>), Error> {
         //生成文件类型
-        let content_type = self.mime.unwrap_or_else(|| match infer::get(content) {
-            Some(ext) => ext.mime_type().to_owned(),
-            None => mime_guess::from_path(&*self.object.object)
-                .first()
-                .map(|v| v.to_string())
-                .unwrap_or_else(|| "application/octet-stream".to_owned())
-                .to_string(),
-        });
+        let content_type = match self.mime {
+            Some(mime) => mime.to_string(),
+            None => match infer::get(content) {
+                Some(ext) => ext.mime_type().to_string(),
+                None => mime_guess::from_path(&*self.object.object)
+                    .first()
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "application/octet-stream".to_owned())
+                    .to_string(),
+            },
+        };
         //读取文件大小
         let content_size = content.len() as u64;
         if content_size >= 5_000_000_000 {

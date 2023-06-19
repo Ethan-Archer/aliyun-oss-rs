@@ -52,7 +52,7 @@ impl GetObjectTagging {
                     .await
                     .map_err(|_| Error::OssInvalidResponse(None))?;
                 let tagging: Tagging = serde_xml_rs::from_reader(&*response_bytes)
-                    .map_err(|_| Error::OssInvalidResponse(Some(response_bytes.into())))?;
+                    .map_err(|_| Error::OssInvalidResponse(Some(response_bytes)))?;
                 Ok(tagging.tag_set.tags)
             }
             _ => Err(normal_error(response).await),
