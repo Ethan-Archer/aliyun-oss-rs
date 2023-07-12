@@ -1,13 +1,13 @@
 use crate::{
-    common::{CacheControl, ContentDisposition},
+    common::{url_encode, CacheControl, ContentDisposition},
     OssObject,
 };
 use base64::{engine::general_purpose, Engine};
 use chrono::NaiveDateTime;
+use hyper::Method;
 use mime_guess::Mime;
-use reqwest::{Method, Url};
 use ring::hmac;
-use std::{collections::BTreeSet, net::IpAddr};
+use std::{collections::HashMap, net::IpAddr};
 
 /// 获取文件的url
 ///
@@ -23,13 +23,11 @@ pub struct GetObjectUrl {
     forward_allow: bool,
     version_id: Option<String>,
     response_mime: Option<Mime>,
-    response_content_language: Option<String>,
+    charset: Option<String>,
     response_cache_control: Option<CacheControl>,
     response_content_disposition: Option<ContentDisposition>,
-    if_modified_since: Option<NaiveDateTime>,
-    if_unmodified_since: Option<NaiveDateTime>,
-    if_match: Option<String>,
-    if_none_match: Option<String>,
+    custom_domain: Option<String>,
+    enable_https: bool,
 }
 impl GetObjectUrl {
     pub(super) fn new(object: OssObject, expires: NaiveDateTime) -> Self {
@@ -42,13 +40,11 @@ impl GetObjectUrl {
             forward_allow: false,
             version_id: None,
             response_mime: None,
-            response_content_language: None,
+            charset: None,
             response_cache_control: None,
             response_content_disposition: None,
-            if_modified_since: None,
-            if_unmodified_since: None,
-            if_match: None,
-            if_none_match: None,
+            custom_domain: None,
+            enable_https: true,
         }
     }
     /// 设置IP信息
@@ -70,8 +66,8 @@ impl GetObjectUrl {
     ///
     /// 默认为不允许
     ///
-    pub fn set_forward_allow(mut self, forward_allow: bool) -> Self {
-        self.forward_allow = forward_allow;
+    pub fn enable_forward_allow(mut self) -> Self {
+        self.forward_allow = true;
         self
     }
     /// 设置版本id
@@ -84,14 +80,9 @@ impl GetObjectUrl {
     }
     /// 设置响应时的content-type
     ///
-    pub fn set_response_mime(mut self, response_mime: Mime) -> Self {
+    pub fn set_response_mime(mut self, response_mime: Mime, charset: Option<&str>) -> Self {
         self.response_mime = Some(response_mime);
-        self
-    }
-    /// 设置响应时的content-language
-    ///
-    pub fn set_response_content_language(mut self, response_content_language: &str) -> Self {
-        self.response_content_language = Some(response_content_language.to_owned());
+        self.charset = charset.map(|v| v.to_owned());
         self
     }
     /// 设置响应时的cache-control
@@ -109,89 +100,78 @@ impl GetObjectUrl {
         self.response_content_disposition = Some(response_content_disposition);
         self
     }
-    /// 设置响应时的If-Modified-Since
+    /// 设置自定义域名
     ///
-    /// 如果指定的时间早于实际修改时间或指定的时间不符合规范，则直接返回Object，并返回200 OK；如果指定的时间等于或者晚于实际修改时间，则返回304 Not Modified。
-    ///
-    pub fn set_if_modified_since(mut self, if_modified_since: NaiveDateTime) -> Self {
-        self.if_modified_since = Some(if_modified_since);
-        self
-    }
-    /// 设置响应时的If-Unmodified-Since
-    ///
-    /// 如果指定的时间等于或者晚于Object实际修改时间，则正常传输Object，并返回200 OK；如果指定的时间早于实际修改时间，则返回412 Precondition Failed。
-    ///
-    pub fn set_if_unmodified_since(mut self, if_unmodified_since: NaiveDateTime) -> Self {
-        self.if_unmodified_since = Some(if_unmodified_since);
-        self
-    }
-    /// 设置响应时的If-Match
-    ///
-    /// 如果传入的ETag和Object的ETag匹配，则正常传输Object，并返回200 OK；如果传入的ETag和Object的ETag不匹配，则返回412 Precondition Failed。
-    ///
-    /// Object的ETag值用于验证数据是否发生了更改，您可以基于ETag值验证数据完整性。
-    pub fn set_if_match(mut self, if_match: &str) -> Self {
-        self.if_match = Some(if_match.to_owned());
-        self
-    }
-    /// 设置响应时的If-None-Match
-    ///
-    /// 如果传入的ETag值和Object的ETag不匹配，则正常传输Object，并返回200 OK；如果传入的ETag和Object的ETag匹配，则返回304 Not Modified。
-    ///
-    /// Object的ETag值用于验证数据是否发生了更改，您可以基于ETag值验证数据完整性。
-    pub fn set_if_none_match(mut self, if_none_match: &str) -> Self {
-        self.if_none_match = Some(if_none_match.to_owned());
+    pub fn set_custom_domain(mut self, custom_domain: &str, enable_https: bool) -> Self {
+        self.custom_domain = Some(custom_domain.to_owned());
+        self.enable_https = enable_https;
         self
     }
     /// 生成url
     ///
-    pub async fn build(self) -> Option<String> {
-        //初始化CanonicalizedOSSHeaders
-        let canonicalized_ossheaders = String::new();
+    pub fn build(self) -> String {
         //生成CanonicalizedResource
-        let mut canonicalized_resource = format!("/{}/{}", self.object.bucket, self.object.object);
-        let mut sub_resource: BTreeSet<String> = BTreeSet::new();
-        //初始化URL
-        let mut query = format!(
-            "Expires={}&OSSAccessKeyId={}",
-            self.expires.timestamp(),
-            self.object.client.ak_id
-        );
+        let mut sub_resource = HashMap::with_capacity(8);
         //增加ip信息
-        if let Some(subnet_mask) = self.subnet_mask {
-            sub_resource.insert(format!("x-oss-ac-subnet-mask={}", subnet_mask));
+        if let Some(source_ip) = self.source_ip {
+            sub_resource.insert("x-oss-ac-source-ip", source_ip.to_string());
         }
-        //增加vpc信息
-        if let Some(vpc_id) = self.vpc_id {
-            sub_resource.insert(format!("x-oss-ac-vpc-id={}", vpc_id));
+        if let Some(subnet_mask) = self.subnet_mask {
+            sub_resource.insert("x-oss-ac-subnet-mask", subnet_mask.to_string());
         }
         //增加是否允许转发
         if self.forward_allow {
-            sub_resource.insert("x-oss-ac-forward-allow=true".to_owned());
+            sub_resource.insert("x-oss-ac-forward-allow", "true".to_string());
+        }
+        //增加vpc信息
+        if let Some(vpc_id) = self.vpc_id {
+            sub_resource.insert("x-oss-ac-vpc-id", vpc_id);
         }
         //增加response-mime
         if let Some(response_mime) = self.response_mime {
-            sub_resource.insert(format!(
-                "response-content-type={}",
-                response_mime.to_string()
-            ));
-        }
-        //组装URL和CanonicalizedResource
-        if !sub_resource.is_empty() {
-            let push_str = sub_resource.into_iter().collect::<Vec<_>>().join("&");
-            query.push_str(&format!("&{}", push_str));
-            canonicalized_resource.push_str(&format!("?{}", push_str));
-            //CanonicalizedResource增加source_ip
-            if let Some(source_ip) = self.source_ip {
-                canonicalized_resource.push_str(&format!("&x-oss-ac-source-ip={}", source_ip));
+            let mut mime_str = response_mime.to_string();
+            if let Some(charset) = self.charset {
+                mime_str.push_str(";charset=");
+                mime_str.push_str(&charset);
             }
+            sub_resource.insert("response-content-type", mime_str);
+        }
+        //插入version_id
+        if let Some(version_id) = self.version_id {
+            sub_resource.insert("versionId", version_id);
+        }
+        //插入cache_control
+        if let Some(cache_control) = self.response_cache_control {
+            sub_resource.insert("response-cache-control", cache_control.to_string());
+        }
+        //插入cache_control
+        if let Some(content_disposition) = self.response_content_disposition {
+            sub_resource.insert(
+                "response-content-disposition",
+                content_disposition.to_string(),
+            );
+        }
+        //组装CanonicalizedResource
+        let mut cr_str = sub_resource
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>();
+        cr_str.sort();
+        let canonicalized_resource = if cr_str.is_empty() {
+            format!("/{}/{}", self.object.bucket, self.object.object)
+        } else {
+            format!(
+                "/{}/{}?{}",
+                self.object.bucket,
+                self.object.object,
+                cr_str.join("&")
+            )
         };
         //组装待签名字符串
         let unsign_str = format!(
-            "{}\n\n\n{}\n{}{}",
+            "{}\n\n\n{}\n{}",
             Method::GET,
             self.expires.timestamp(),
-            canonicalized_ossheaders,
             canonicalized_resource
         );
         //生成签名
@@ -202,12 +182,39 @@ impl GetObjectUrl {
         let sign_str =
             general_purpose::STANDARD.encode(hmac::sign(&sign_result, unsign_str.as_bytes()));
         //组装url
-        query.push_str("&Signature=");
-        query.push_str(&sign_str);
-        let url = format!(
-            "https://{}.{}/{}?{}",
-            self.object.bucket, self.object.client.endpoint, self.object.object, query
-        );
-        Url::parse(&url).ok().map(|v| v.to_string())
+        let protocal = if self.enable_https { "https" } else { "http" };
+        let host = if let Some(custom_domain) = &self.custom_domain {
+            custom_domain.to_string()
+        } else {
+            format!("{}.{}", self.object.bucket, self.object.client.endpoint)
+        };
+        sub_resource.remove("x-oss-ac-source-ip");
+        if sub_resource.is_empty() {
+            format!(
+                "{}://{}/{}?Expires={}&OSSAccessKeyId={}&Signature={}",
+                protocal,
+                host,
+                url_encode(&self.object.object),
+                self.expires.timestamp(),
+                self.object.client.ak_id,
+                url_encode(&sign_str)
+            )
+        } else {
+            let query_str = sub_resource
+                .into_iter()
+                .map(|(k, v)| format!("{}={}", k, url_encode(&v)))
+                .collect::<Vec<_>>()
+                .join("&");
+            format!(
+                "{}://{}/{}?Expires={}&OSSAccessKeyId={}&{}&Signature={}",
+                protocal,
+                host,
+                url_encode(&self.object.object),
+                self.expires.timestamp(),
+                self.object.client.ak_id,
+                query_str,
+                url_encode(&sign_str)
+            )
+        }
     }
 }

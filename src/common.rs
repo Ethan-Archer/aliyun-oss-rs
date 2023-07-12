@@ -1,11 +1,68 @@
 //! 本地定义的各种数据
 //!
 //!
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use serde_derive::{Deserialize, Serialize};
-use std::fmt;
+use std::{
+    collections::{hash_map::Iter, HashMap},
+    fmt,
+};
 
-// -------------------------- 公共部分 --------------------------
+// -------------------------- 公共方法 --------------------------
+//编码查询参数值
+const URL_ENCODE: &AsciiSet = &NON_ALPHANUMERIC.remove(b'-').remove(b'/');
+pub(crate) fn url_encode(input: &str) -> String {
+    utf8_percent_encode(input, URL_ENCODE).to_string()
+}
+
+// -------------------------- 公共数据 --------------------------
+
+// 迭代器
+#[derive(Debug, Deserialize)]
+pub(crate) struct OssInners {
+    inners: HashMap<String, String>,
+}
+impl OssInners {
+    pub fn new() -> Self {
+        let inners = HashMap::with_capacity(10);
+        OssInners { inners }
+    }
+    pub fn from(key: impl ToString, value: impl ToString) -> Self {
+        let mut inners = HashMap::with_capacity(10);
+        inners.insert(key.to_string(), value.to_string());
+        OssInners { inners }
+    }
+    pub fn insert(&mut self, key: impl ToString, value: impl ToString) {
+        self.inners.insert(key.to_string(), value.to_string());
+    }
+    pub fn insert_tag(&mut self, key: impl ToString, value: Option<impl ToString>) {
+        let mut tags = self
+            .inners
+            .get("x-oss-tagging")
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| String::new());
+        let new_tag = if let Some(value) = value {
+            format!(
+                "{}={}",
+                url_encode(&key.to_string()),
+                url_encode(&value.to_string())
+            )
+        } else {
+            url_encode(&key.to_string())
+        };
+        if !tags.is_empty() {
+            tags.push_str("&");
+        }
+        tags.push_str(&new_tag);
+        self.inners.insert("x-oss-tagging".to_string(), tags);
+    }
+    pub fn len(&self) -> usize {
+        self.inners.len()
+    }
+    pub fn iter(&self) -> Iter<'_, String, String> {
+        self.inners.iter()
+    }
+}
 
 /// 访问权限ACL
 #[derive(Debug, Deserialize, Clone)]
@@ -102,22 +159,21 @@ impl fmt::Display for CacheControl {
 #[derive(Debug, Clone)]
 pub enum ContentDisposition {
     Inline,
-    Attachment(Option<String>),
+    Attachment,
+    AttachmentWithNewName(String),
 }
 impl fmt::Display for ContentDisposition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ContentDisposition::Inline => f.write_str("inline"),
-            ContentDisposition::Attachment(Some(file_name)) => {
-                let encoded_filename =
-                    utf8_percent_encode(&file_name, NON_ALPHANUMERIC).to_string();
+            ContentDisposition::AttachmentWithNewName(file_name) => {
                 let content_disposition_value = format!(
-                    "attachment; filename=\"{}\"; filename*=UTF-8''{}",
-                    encoded_filename, encoded_filename
+                    "attachment;filename=\"{0}\";filename*=UTF-8''{0}",
+                    url_encode(file_name)
                 );
                 f.write_str(&content_disposition_value)
             }
-            ContentDisposition::Attachment(None) => f.write_str("attachment"),
+            ContentDisposition::Attachment => f.write_str("attachment"),
         }
     }
 }
@@ -146,13 +202,27 @@ pub struct BucketBase {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct Buckets {
-    pub bucket: Vec<BucketBase>,
+    pub bucket: Option<Vec<BucketBase>>,
 }
 
+// 查询存储空间列表的结果集合
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct ListAllMyBucketsResult {
+    /// 如果一次查询未穷尽所有存储空间，next_marker则可用于下一次继续查询
+    pub next_marker: Option<String>,
+    /// 存储空间列表
     pub buckets: Buckets,
+}
+
+/// 查询存储空间列表的结果集合
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ListAllMyBuckets {
+    /// 如果一次查询未穷尽所有存储空间，next_marker则可用于下一次继续查询
+    pub next_marker: Option<String>,
+    /// 存储空间列表
+    pub buckets: Option<Vec<BucketBase>>,
 }
 
 // ------ describe_regions ------
@@ -180,7 +250,7 @@ pub(crate) struct RegionInfoList {
 // ------ list_objects ------
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub(crate) struct ListBucketResult {
+pub struct ObjectsList {
     // 列表继续请求的token
     pub next_continuation_token: Option<String>,
     // 文件列表
@@ -369,7 +439,6 @@ pub struct ObjectMeta {
 
 // ------ get_object_tagging ------
 #[derive(Debug, Deserialize)]
-#[serde(rename = "Tagging")]
 pub(crate) struct Tagging {
     #[serde(rename = "TagSet")]
     pub tag_set: TagSet,
@@ -378,7 +447,7 @@ pub(crate) struct Tagging {
 #[derive(Debug, Deserialize)]
 pub(crate) struct TagSet {
     #[serde(rename = "Tag")]
-    pub tags: Vec<Tag>,
+    pub tags: Option<Vec<Tag>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -388,4 +457,84 @@ pub struct Tag {
     pub key: String,
     #[serde(rename = "Value")]
     pub value: String,
+}
+
+// ------ copy_object ------
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct CopyObjectResult {
+    pub e_tag: String,
+    pub last_modified: String,
+    pub version_id: Option<String>,
+}
+
+// ------ append_object ------
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct AppendObjectResult {
+    pub next_position: Option<String>,
+    pub crc64ecma: Option<String>,
+    pub version_id: Option<String>,
+}
+
+// ------ del_object ------
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct DelObjectResult {
+    /// 删除标记，含义请详细查看阿里云官方文档
+    pub delete_marker: Option<bool>,
+    /// 成功删除的文件的版本id
+    pub version_id: Option<String>,
+}
+
+// ------ get_versions ------
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ListVersionsResult {
+    pub is_truncated: bool,
+    pub next_version_id_marker: Option<String>,
+    pub next_key_marker: Option<String>,
+    pub delete_marker: Option<Vec<DeleteMarker>>,
+    pub version: Option<Vec<Version>>,
+    pub common_prefixes: Option<Vec<CommonPrefixes>>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ObjectVersionsResult {
+    pub delete_marker: Option<Vec<DeleteMarker>>,
+    pub version: Option<Vec<Version>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct DeleteMarker {
+    pub key: String,
+    pub version_id: String,
+    pub is_latest: bool,
+    pub last_modified: String,
+    pub owner: Owner,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct Version {
+    pub key: String,
+    pub version_id: String,
+    pub is_latest: bool,
+    pub last_modified: String,
+    pub e_tag: String,
+    pub type_: String,
+    pub size: u64,
+    pub storage_class: StorageClass,
+    pub owner: Owner,
+}
+
+// ------ put_object ------
+#[derive(Debug)]
+pub struct PutObjectResult {
+    /// ETa值
+    pub e_tag: Option<String>,
+    /// 成功上传的文件的版本id
+    pub version_id: Option<String>,
 }

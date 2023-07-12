@@ -1,4 +1,5 @@
 //!
+//! ** 目前库正在快速开发和调整中，所有功能都可以正常使用，但v1.0版本之前的所有调整都不保证向后兼容，请谨慎使用 **
 //! 阿里云对象存储服务（Object Storage Service，简称OSS），是阿里云对外提供的海量、安全、低成本、高可靠的云存储服务。
 //!
 //! 没有复杂的结构，仅仅为快速调用而实现，设计遵循极简、实用原则，通过 OssClient - OssBucket - OssObject 三层结构，实现了部份常用API，目前不支持的API在后续会逐步增加。
@@ -85,4 +86,4 @@ pub mod client;
 pub mod common;
 mod error;
 pub mod object;
-mod sign;
+mod send;

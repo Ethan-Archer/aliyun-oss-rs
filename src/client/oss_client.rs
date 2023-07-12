@@ -1,5 +1,5 @@
 use super::{DescribeRegions, ListBuckets};
-use crate::{OssBucket, OssObject};
+use crate::OssBucket;
 use std::borrow::Cow;
 
 /// OSS容器入口，可以转换为OssBucket和OssObject，同时也实现了查询地域信息和查询bucket列表两个API
@@ -23,20 +23,15 @@ impl OssClient {
     ///
     pub fn new(ak_id: &str, ak_secret: &str, endpoint: &str) -> Self {
         OssClient {
-            ak_id: Cow::Owned(ak_id.to_owned()),
-            ak_secret: Cow::Owned(ak_secret.to_owned()),
-            endpoint: Cow::Owned(endpoint.to_owned()),
+            ak_id: ak_id.to_owned().into(),
+            ak_secret: ak_secret.to_owned().into(),
+            endpoint: endpoint.to_owned().into(),
         }
     }
 
     /// 初始化OssBucket
     pub fn bucket(&self, bucket: &str) -> OssBucket {
         OssBucket::new(self.clone(), bucket)
-    }
-
-    /// 初始化OssObject
-    pub fn object(&self, bucket: &str, object: &str) -> OssObject {
-        OssObject::new(self.clone(), bucket, object.trim().trim_matches('/'))
     }
 
     /// 查询所有地域的Endpoint信息

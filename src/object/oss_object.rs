@@ -1,8 +1,8 @@
 use super::{
-    del_object::DelObject, get_object::GetObject, get_object_url::GetObjectUrl, AppendObject,
-    GetObjectMeta, GetObjectTagging, PutObject,
+    del_object::DelObject, AppendObject, CopyObject, GetObject, GetObjectMeta, GetObjectTagging,
+    GetObjectUrl, ListObjectVersions, PutObject,
 };
-use crate::OssClient;
+use crate::{OssBucket, OssClient};
 use chrono::NaiveDateTime;
 use std::borrow::Cow;
 
@@ -15,10 +15,10 @@ pub struct OssObject {
 }
 
 impl OssObject {
-    pub(crate) fn new(client: OssClient, bucket: &str, object: &str) -> Self {
+    pub(crate) fn new(bucket: OssBucket, object: &str) -> Self {
         OssObject {
-            client,
-            bucket: Cow::Owned(bucket.to_owned()),
+            client: bucket.client,
+            bucket: bucket.bucket,
             object: Cow::Owned(object.to_owned()),
         }
     }
@@ -26,7 +26,7 @@ impl OssObject {
     pub fn put_object(&self) -> PutObject {
         PutObject::new(self.clone())
     }
-    /// 获取文件的标签信息
+    /// 追加文件
     pub fn append_object(&self) -> AppendObject {
         AppendObject::new(self.clone())
     }
@@ -49,5 +49,13 @@ impl OssObject {
     /// 获取文件内容
     pub fn get_object(&self) -> GetObject {
         GetObject::new(self.clone())
+    }
+    /// 复制文件
+    pub fn copy_object(&self, copy_source: &str) -> CopyObject {
+        CopyObject::new(self.clone(), copy_source)
+    }
+    /// 获取文件的标签信息
+    pub fn list_object_versions(&self) -> ListObjectVersions {
+        ListObjectVersions::new(self.client.clone(), &self.bucket, &self.object)
     }
 }

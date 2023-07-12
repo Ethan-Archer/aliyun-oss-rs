@@ -1,5 +1,6 @@
-use crate::{error::normal_error, sign::SignRequest, Error, OssBucket};
-use reqwest::Client;
+use hyper::{Body, Method};
+
+use crate::{error::normal_error, send::send_to_oss, Error, OssBucket};
 
 /// 删除某个存储空间
 ///
@@ -15,22 +16,17 @@ impl DelBucket {
     }
 
     pub async fn send(self) -> Result<(), Error> {
-        //构造URL
-        let url = format!(
-            "https://{}.{}",
-            self.bucket.bucket, self.bucket.client.endpoint
-        );
-        //发送请求
-        let response = Client::new()
-            .delete(url)
-            .sign(
-                &self.bucket.client.ak_id,
-                &self.bucket.client.ak_secret,
-                Some(&self.bucket.bucket),
-                None,
-            )?
-            .send()
-            .await?;
+        //构建http请求
+        let response = send_to_oss(
+            &self.bucket.client,
+            Some(&self.bucket.bucket),
+            None,
+            Method::DELETE,
+            None,
+            None,
+            Body::empty(),
+        )?
+        .await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {

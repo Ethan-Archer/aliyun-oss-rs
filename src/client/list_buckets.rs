@@ -1,11 +1,10 @@
 use crate::{
-    common::{BucketBase, ListAllMyBucketsResult},
+    common::{ListAllMyBuckets, ListAllMyBucketsResult, OssInners},
     error::normal_error,
-    sign::SignRequest,
+    send::send_to_oss,
     Error, OssClient,
 };
-use reqwest::Client;
-use std::{borrow::Cow, cmp};
+use hyper::{body::to_bytes, Body, Method};
 
 /// 查询存储空间列表
 ///
@@ -19,77 +18,70 @@ use std::{borrow::Cow, cmp};
 ///
 pub struct ListBuckets {
     client: OssClient,
-    prefix: Option<Cow<'static, str>>,
-    marker: Option<Cow<'static, str>>,
-    max_keys: u16,
-    group_id: Option<Cow<'static, str>>,
+    querys: OssInners,
+    headers: OssInners,
 }
 
 impl ListBuckets {
     pub(super) fn new(client: OssClient) -> Self {
         ListBuckets {
             client,
-            prefix: None,
-            marker: None,
-            max_keys: 100,
-            group_id: None,
+            querys: OssInners::new(),
+            headers: OssInners::new(),
         }
     }
 
     /// 限定返回的Bucket名称必须以prefix作为前缀。如果不设定，则不过滤前缀信息。
-    pub fn set_prefix(mut self, prefix: &str) -> Self {
-        self.prefix = Some(Cow::Owned(prefix.to_owned()));
+    ///
+    /// 前缀要求：
+    /// - 不能为空，长度不能大于63字节
+    /// - 只能含有小写英文字母和数字，以及 - 连字符，且不能以连字符开头
+    ///
+    pub fn set_prefix(mut self, prefix: impl ToString) -> Self {
+        self.querys.insert("prefix", prefix);
         self
     }
-
     /// 设定结果从marker之后按字母排序的第一个开始返回。如果不设定，则从头开始返回数据。
-    pub fn set_marker(mut self, marker: &str) -> Self {
-        self.marker = Some(Cow::Owned(marker.to_owned()));
+    pub fn set_marker(mut self, marker: impl ToString) -> Self {
+        self.querys.insert("marker", marker);
         self
     }
-
     /// 限定此次返回Bucket的最大个数。取值范围：1~1000，默认值：100
-    pub fn set_max_keys(mut self, max_keys: u16) -> Self {
-        let max_keys = cmp::max(1, cmp::min(max_keys, 100));
-        self.max_keys = max_keys;
+    pub fn set_max_keys(mut self, max_keys: u32) -> Self {
+        self.querys.insert("max-keys", max_keys);
         self
     }
     /// 指定资源组ID
-    pub fn set_group_id(mut self, group_id: &str) -> Self {
-        self.group_id = Some(Cow::Owned(group_id.to_owned()));
+    pub fn set_group_id(mut self, group_id: impl ToString) -> Self {
+        self.headers.insert("x-oss-resource-group-id", group_id);
         self
     }
     /// 发送请求
-    pub async fn send(&self) -> Result<Vec<BucketBase>, Error> {
+    pub async fn send(&self) -> Result<ListAllMyBuckets, Error> {
         //构建http请求
-        let mut req = Client::new()
-            .get(format!("https://{}/", self.client.endpoint))
-            .query(&[
-                ("prefix", self.prefix.as_deref()),
-                ("marker", self.marker.as_deref()),
-            ])
-            .query(&[("max-keys", self.max_keys)]);
-        //附加header
-        if let Some(group_id) = &self.group_id {
-            req = req.header("x-oss-resource-group-id", group_id.as_ref());
-        }
-        //发送请求
-        let response = req
-            .sign(&self.client.ak_id, &self.client.ak_secret, None, None)?
-            .send()
-            .await?;
+        let response = send_to_oss(
+            &self.client,
+            None,
+            None,
+            Method::GET,
+            Some(&self.querys),
+            Some(&self.headers),
+            Body::empty(),
+        )?
+        .await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {
             code if code.is_success() => {
-                let response_bytes = response
-                    .bytes()
+                let response_bytes = to_bytes(response.into_body())
                     .await
                     .map_err(|_| Error::OssInvalidResponse(None))?;
-                let buckets: ListAllMyBucketsResult =
-                    serde_xml_rs::from_reader(&*response_bytes)
-                        .map_err(|_| Error::OssInvalidResponse(Some(response_bytes)))?;
-                Ok(buckets.buckets.bucket)
+                let result: ListAllMyBucketsResult = serde_xml_rs::from_reader(&*response_bytes)
+                    .map_err(|_| Error::OssInvalidResponse(Some(response_bytes)))?;
+                Ok(ListAllMyBuckets {
+                    next_marker: result.next_marker,
+                    buckets: result.buckets.bucket,
+                })
             }
             _ => Err(normal_error(response).await),
         }

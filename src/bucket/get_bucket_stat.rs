@@ -1,5 +1,10 @@
-use crate::{common::BucketStat, error::normal_error, sign::SignRequest, Error, OssBucket};
-use reqwest::Client;
+use crate::{
+    common::{BucketStat, OssInners},
+    error::normal_error,
+    send::send_to_oss,
+    Error, OssBucket,
+};
+use hyper::{body::to_bytes, Body, Method};
 
 /// 获取指定存储空间的存储容量以及文件数量
 ///
@@ -10,36 +15,32 @@ use reqwest::Client;
 /// 具体详情查阅 [阿里云官方文档](https://help.aliyun.com/document_detail/426056.html)
 pub struct GetBucketStat {
     bucket: OssBucket,
+    querys: OssInners,
 }
 impl GetBucketStat {
     pub(super) fn new(bucket: OssBucket) -> Self {
-        GetBucketStat { bucket }
+        let querys = OssInners::from("stat", "");
+        GetBucketStat { bucket, querys }
     }
 
     /// 发送请求
     pub async fn send(self) -> Result<BucketStat, Error> {
-        //构造URL
-        let url = format!(
-            "https://{}.{}/?stat",
-            self.bucket.bucket, self.bucket.client.endpoint
-        );
-        //发送请求
-        let response = Client::new()
-            .get(url)
-            .sign(
-                &self.bucket.client.ak_id,
-                &self.bucket.client.ak_secret,
-                Some(&self.bucket.bucket),
-                None,
-            )?
-            .send()
-            .await?;
+        //构建http请求
+        let response = send_to_oss(
+            &self.bucket.client,
+            Some(&self.bucket.bucket),
+            None,
+            Method::GET,
+            Some(&self.querys),
+            None,
+            Body::empty(),
+        )?
+        .await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {
             code if code.is_success() => {
-                let response_bytes = response
-                    .bytes()
+                let response_bytes = to_bytes(response.into_body())
                     .await
                     .map_err(|_| Error::OssInvalidResponse(None))?;
                 let bucket_stat: BucketStat = serde_xml_rs::from_reader(&*response_bytes)

@@ -1,14 +1,14 @@
 use crate::{
-    common::{Acl, CacheControl, ContentDisposition, StorageClass},
+    common::{
+        url_encode, Acl, CacheControl, ContentDisposition, OssInners, PutObjectResult, StorageClass,
+    },
     error::{normal_error, Error},
-    sign::SignRequest,
+    send::send_to_oss,
     OssObject,
 };
 use futures_util::StreamExt;
-use mime_guess::Mime;
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
-use reqwest::{header, Body, Client};
-use std::collections::{HashMap, HashSet};
+use hyper::{header, Body, Method};
+use std::collections::HashMap;
 use tokio::{fs::File, io::BufReader};
 use tokio_util::io::ReaderStream;
 
@@ -23,86 +23,63 @@ use tokio_util::io::ReaderStream;
 /// 具体详情查阅 [阿里云官方文档](https://help.aliyun.com/document_detail/31978.html)
 pub struct PutObject {
     object: OssObject,
-    mime: Option<Mime>,
-    acl: Option<Acl>,
-    storage_class: Option<StorageClass>,
-    cache_control: Option<CacheControl>,
-    content_disposition: Option<ContentDisposition>,
-    forbid_overwrite: bool,
-    x_oss_meta: HashMap<String, String>,
-    x_oss_tagging: HashSet<String>,
+    headers: OssInners,
+    querys: OssInners,
+    mime: Option<String>,
+    tags: HashMap<String, String>,
     callback: Option<Box<dyn Fn(u64, u64) + Send + Sync + 'static>>,
 }
-
 impl PutObject {
     pub(super) fn new(object: OssObject) -> Self {
         PutObject {
             object,
+            headers: OssInners::new(),
+            querys: OssInners::new(),
             mime: None,
-            acl: None,
-            storage_class: None,
-            cache_control: None,
-            content_disposition: None,
-            forbid_overwrite: false,
-            x_oss_meta: HashMap::new(),
-            x_oss_tagging: HashSet::new(),
+            tags: HashMap::new(),
             callback: None,
         }
     }
     /// 设置文件的mime类型
-    pub fn set_mime(mut self, mime: Mime) -> Self {
-        self.mime = Some(mime);
+    pub fn set_mime(mut self, mime: impl ToString) -> Self {
+        self.mime = Some(mime.to_string());
         self
     }
     /// 设置文件的访问权限
     pub fn set_acl(mut self, acl: Acl) -> Self {
-        self.acl = Some(acl);
+        self.headers.insert("x-oss-object-acl", acl);
         self
     }
     /// 设置文件的存储类型
     pub fn set_storage_class(mut self, storage_class: StorageClass) -> Self {
-        self.storage_class = Some(storage_class);
+        self.headers.insert("x-oss-storage-class", storage_class);
         self
     }
     /// 文件被下载时网页的缓存行为
     pub fn set_cache_control(mut self, cache_control: CacheControl) -> Self {
-        self.cache_control = Some(cache_control);
+        self.headers.insert(header::CACHE_CONTROL, cache_control);
         self
     }
     /// 设置文件的展示形式
     pub fn set_content_disposition(mut self, content_disposition: ContentDisposition) -> Self {
-        self.content_disposition = Some(content_disposition);
+        self.headers
+            .insert(header::CONTENT_DISPOSITION, content_disposition);
         self
     }
-    /// 设置是否允许覆盖同名文件
-    pub fn set_forbid_overwrite(mut self, forbid_overwrite: bool) -> Self {
-        self.forbid_overwrite = forbid_overwrite;
+    /// 不允许覆盖同名文件
+    pub fn forbid_overwrite(mut self) -> Self {
+        self.headers.insert("x-oss-forbid-overwrite", "true");
         self
     }
     /// 设置需要附加的metadata
-    pub fn set_meta(mut self, key: &str, value: &str) -> Result<Self, Error> {
-        if !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
-            || !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
-        {
-            return Err(Error::InvalidCharacter);
-        };
-        self.x_oss_meta.insert(key.to_owned(), value.to_owned());
-        Ok(self)
+    pub fn set_meta(mut self, key: impl ToString, value: impl ToString) -> Self {
+        self.headers
+            .insert(format!("x-oss-meta-{}", key.to_string()), value);
+        self
     }
-    /// 设置tag信息
-    pub fn set_tagging(mut self, key: &str, value: Option<&str>) -> Self {
-        match value {
-            Some(v) => {
-                let key_encode = utf8_percent_encode(key, NON_ALPHANUMERIC);
-                let v_encode = utf8_percent_encode(v, NON_ALPHANUMERIC);
-                self.x_oss_tagging
-                    .insert(format!("{}={}", key_encode, v_encode));
-            }
-            None => {
-                let key_encode = utf8_percent_encode(key, NON_ALPHANUMERIC);
-                self.x_oss_tagging.insert(key_encode.to_string());
-            }
-        };
+    /// 设置标签信息
+    pub fn set_tagging(mut self, key: impl ToString, value: impl ToString) -> Self {
+        self.tags.insert(key.to_string(), value.to_string());
         self
     }
     /// 设置文件上传进度的回调方法，此方法仅对send_file()有效
@@ -122,14 +99,10 @@ impl PutObject {
     }
     /// 将磁盘中的文件上传到OSS
     ///
-    /// 如果设置了上传进度的回调方法，调用者将会实时获得最新的上传进度
-    ///
-    /// - 返回值 0 - OSS返回的Etag标识
-    /// - 返回值 1 - 开启版本控制时，OSS会返回的文件版本号
-    pub async fn send_file(self, file: &str) -> Result<(Option<String>, Option<String>), Error> {
+    pub async fn send_file(mut self, file: &str) -> Result<PutObjectResult, Error> {
         //生成文件类型
         let file_type = match self.mime {
-            Some(mime) => mime.to_string(),
+            Some(mime) => mime,
             None => match infer::get_from_path(file)? {
                 Some(ext) => ext.mime_type().to_owned(),
                 None => mime_guess::from_path(&*self.object.object)
@@ -139,6 +112,25 @@ impl PutObject {
                     .to_string(),
             },
         };
+        self.headers.insert(header::CONTENT_TYPE, file_type);
+        //插入标签
+        let tags = self
+            .tags
+            .into_iter()
+            .map(|(key, value)| {
+                if value.is_empty() {
+                    url_encode(&key.to_string())
+                } else {
+                    format!(
+                        "{}={}",
+                        url_encode(&key.to_string()),
+                        url_encode(&value.to_string())
+                    )
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("&");
+        self.headers.insert("x-oss-tagging", tags);
         //打开文件
         let file = File::open(file).await?;
         //读取文件大小
@@ -146,60 +138,13 @@ impl PutObject {
         if file_size >= 5_000_000_000 {
             return Err(Error::FileTooBig);
         }
-        //对文件名进行urlencode
-        let filename_str = utf8_percent_encode(&self.object.object, NON_ALPHANUMERIC).to_string();
-        //构造url
-        let url = format!(
-            "https://{}.{}/{}",
-            self.object.bucket, self.object.client.endpoint, filename_str
-        );
-        //构造http请求
-        let mut req = Client::new()
-            .put(url)
-            //插入content_type
-            .header(header::CONTENT_TYPE, file_type)
-            //插入content_length
-            .header(header::CONTENT_LENGTH, file_size);
-        //插入acl
-        if let Some(acl) = self.acl {
-            req = req.header("x-oss-object-acl", acl.to_string());
-        }
-        //插入cache-control
-        if let Some(cache_control) = self.cache_control {
-            req = req.header(header::CACHE_CONTROL, cache_control.to_string());
-        }
-        //插入content-disposition
-        if let Some(content_disposition) = self.content_disposition {
-            req = req.header(header::CONTENT_DISPOSITION, content_disposition.to_string());
-        }
-        //插入存储类型
-        if let Some(storage_class) = self.storage_class {
-            req = req.header("x-oss-storage-class", storage_class.to_string());
-        }
-        //插入不允许覆盖标志
-        if self.forbid_overwrite {
-            req = req.header("x-oss-forbid-overwrite", "true");
-        }
-        //插入x-oss-meta
-        for (key, value) in self.x_oss_meta {
-            req = req.header("x-oss-meta-".to_owned() + &key, value)
-        }
-        //插入x-oss-tagging
-        if !self.x_oss_tagging.is_empty() {
-            let tagging_str = self
-                .x_oss_tagging
-                .into_iter()
-                .collect::<Vec<String>>()
-                .join("&");
-            req = req.header("x-oss-tagging", tagging_str);
-        }
         //初始化文件内容读取数据流
         let buf = BufReader::with_capacity(131072, file);
         let stream = ReaderStream::with_capacity(buf, 16384);
         //初始化已上传内容大小
         let mut uploaded_size = 0;
         //初始化上传请求
-        let req = req.body(Body::wrap_stream(stream.map(move |result| match result {
+        let body = Body::wrap_stream(stream.map(move |result| match result {
             Ok(chunk) => {
                 if let Some(callback) = &self.callback {
                     let upload_size = chunk.len() as u64;
@@ -209,46 +154,41 @@ impl PutObject {
                 Ok(chunk)
             }
             Err(err) => Err(err),
-        })));
+        }));
         //上传文件
-        let response = req
-            .sign(
-                &self.object.client.ak_id,
-                &self.object.client.ak_secret,
-                Some(&self.object.bucket),
-                Some(&self.object.object),
-            )?
-            .send()
-            .await?;
+        let response = send_to_oss(
+            &self.object.client,
+            Some(&self.object.bucket),
+            Some(&self.object.object),
+            Method::PUT,
+            Some(&self.querys),
+            Some(&self.headers),
+            body,
+        )?
+        .await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {
             code if code.is_success() => {
                 let headers = response.headers();
-                let e_tag = headers
-                    .get("ETag")
-                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()))
-                    .map(|v| v.replace("\"", ""));
+                let e_tag = headers.get("ETag").and_then(|header| {
+                    header.to_str().ok().map(|s| s.trim_matches('"').to_owned())
+                });
                 let version_id = headers
                     .get("x-oss-version-id")
                     .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
-                Ok((e_tag, version_id))
+                Ok(PutObjectResult { e_tag, version_id })
             }
             _ => Err(normal_error(response).await),
         }
     }
     /// 将内存中的数据上传到OSS
     ///
-    /// - 返回值 0 - OSS返回的Etag标识
-    /// - 返回值 1 - 开启版本控制时，OSS会返回的文件版本号
-    pub async fn send_content(
-        self,
-        content: &[u8],
-    ) -> Result<(Option<String>, Option<String>), Error> {
+    pub async fn send_content(mut self, content: Vec<u8>) -> Result<PutObjectResult, Error> {
         //生成文件类型
         let content_type = match self.mime {
-            Some(mime) => mime.to_string(),
-            None => match infer::get(content) {
+            Some(mime) => mime,
+            None => match infer::get(&content) {
                 Some(ext) => ext.mime_type().to_string(),
                 None => mime_guess::from_path(&*self.object.object)
                     .first()
@@ -257,84 +197,53 @@ impl PutObject {
                     .to_string(),
             },
         };
-        //读取文件大小
+        self.headers.insert(header::CONTENT_TYPE, content_type);
+        //插入标签
+        let tags = self
+            .tags
+            .into_iter()
+            .map(|(key, value)| {
+                if value.is_empty() {
+                    url_encode(&key.to_string())
+                } else {
+                    format!(
+                        "{}={}",
+                        url_encode(&key.to_string()),
+                        url_encode(&value.to_string())
+                    )
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("&");
+        self.headers.insert("x-oss-tagging", tags);
+        //读取大小
         let content_size = content.len() as u64;
         if content_size >= 5_000_000_000 {
             return Err(Error::FileTooBig);
         }
-        //对文件名进行urlencode
-        let filename_str = utf8_percent_encode(
-            &self.object.object.trim().trim_matches('/'),
-            NON_ALPHANUMERIC,
-        )
-        .to_string();
-        //构造请求url
-        let url = format!(
-            "https://{}.{}/{}",
-            self.object.bucket, self.object.client.endpoint, filename_str
-        );
-        //构造http请求
-        let mut req = Client::new()
-            .put(url)
-            .header(header::CONTENT_TYPE, content_type)
-            .header(header::CONTENT_LENGTH, content_size)
-            .body(content.to_owned());
-        //插入acl
-        if let Some(acl) = self.acl {
-            req = req.header("x-oss-object-acl", acl.to_string());
-        }
-        //插入cache—control
-        if let Some(cache_control) = self.cache_control {
-            req = req.header(header::CACHE_CONTROL, cache_control.to_string());
-        }
-        //插入content-disposition
-        if let Some(content_disposition) = self.content_disposition {
-            req = req.header(header::CONTENT_DISPOSITION, content_disposition.to_string());
-        }
-        //插入存储类型
-        if let Some(storage_class) = self.storage_class {
-            req = req.header("x-oss-storage-class", storage_class.to_string());
-        }
-        //插入不允许覆盖标志
-        if self.forbid_overwrite {
-            req = req.header("x-oss-forbid-overwrite", "true");
-        }
-        //插入x-oss-meta
-        for (key, value) in self.x_oss_meta {
-            req = req.header("x-oss-meta-".to_owned() + &key, value)
-        }
-        //插入x-oss-tagging
-        if !self.x_oss_tagging.is_empty() {
-            let tagging_str = self
-                .x_oss_tagging
-                .into_iter()
-                .collect::<Vec<String>>()
-                .join("&");
-            req = req.header("x-oss-tagging", tagging_str);
-        }
-        //签名并发送请求
-        let response = req
-            .sign(
-                &self.object.client.ak_id,
-                &self.object.client.ak_secret,
-                Some(&self.object.bucket),
-                Some(&self.object.object),
-            )?
-            .send()
-            .await?;
+        //上传文件
+        let response = send_to_oss(
+            &self.object.client,
+            Some(&self.object.bucket),
+            Some(&self.object.object),
+            Method::PUT,
+            Some(&self.querys),
+            Some(&self.headers),
+            Body::from(content),
+        )?
+        .await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {
             code if code.is_success() => {
                 let headers = response.headers();
-                let e_tag = headers
-                    .get("ETag")
-                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()))
-                    .map(|v| v.replace(r#"\""#, ""));
+                let e_tag = headers.get("ETag").and_then(|header| {
+                    header.to_str().ok().map(|s| s.trim_matches('"').to_owned())
+                });
                 let version_id = headers
                     .get("x-oss-version-id")
                     .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
-                Ok((e_tag, version_id))
+                Ok(PutObjectResult { e_tag, version_id })
             }
             _ => Err(normal_error(response).await),
         }

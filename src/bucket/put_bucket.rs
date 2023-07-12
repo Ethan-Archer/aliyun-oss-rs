@@ -1,10 +1,10 @@
 use crate::{
-    common::{Acl, DataRedundancyType, StorageClass},
+    common::{Acl, DataRedundancyType, OssInners, StorageClass},
     error::normal_error,
-    sign::SignRequest,
+    send::send_to_oss,
     Error, OssBucket,
 };
-use reqwest::Client;
+use hyper::Method;
 use serde_derive::Serialize;
 use serde_xml_rs::to_string;
 
@@ -22,8 +22,7 @@ struct CreateBucketConfiguration {
 /// 具体详情查阅 [阿里云官方文档](https://help.aliyun.com/document_detail/31959.html)
 pub struct PutBucket {
     bucket: OssBucket,
-    acl: Option<Acl>,
-    group_id: Option<String>,
+    headers: OssInners,
     storage_class: Option<StorageClass>,
     data_redundancy_type: Option<DataRedundancyType>,
 }
@@ -31,15 +30,14 @@ impl PutBucket {
     pub(super) fn new(bucket: OssBucket) -> Self {
         PutBucket {
             bucket,
-            acl: None,
-            group_id: None,
+            headers: OssInners::new(),
             storage_class: None,
             data_redundancy_type: None,
         }
     }
     /// 设置存储空间的访问权限
     pub fn set_acl(mut self, acl: Acl) -> Self {
-        self.acl = Some(acl);
+        self.headers.insert("x-oss-acl", acl);
         self
     }
     /// 指定资源组ID
@@ -47,8 +45,8 @@ impl PutBucket {
     /// 如果在请求中携带该请求头并指定资源组ID，则创建的存储空间属于该资源组。当指定的资源组ID为rg-default-id时，创建的存储空间属于默认资源组。
     ///
     /// 如果在请求中未携带该请求头，则创建的存储空间属于默认资源组。
-    pub fn set_group_id(mut self, group_id: String) -> Self {
-        self.group_id = Some(group_id);
+    pub fn set_group_id(mut self, group_id: impl ToString) -> Self {
+        self.headers.insert("x-oss-resource-group-id", group_id);
         self
     }
     /// 设置存储空间的存储类型
@@ -73,31 +71,17 @@ impl PutBucket {
                 body.push_str(&body_str)
             };
         }
-        //构造URL
-        let url = format!(
-            "https://{}.{}",
-            self.bucket.bucket, self.bucket.client.endpoint
-        );
-        //构造请求
-        let mut req = Client::new().put(url).body(body);
-        //插入acl
-        if let Some(acl) = self.acl {
-            req = req.header("x-oss-acl", acl.to_string());
-        }
-        //插入资源组id
-        if let Some(group_id) = self.group_id {
-            req = req.header("x-oss-resource-group-id", group_id)
-        }
-        //发送请求
-        let response = req
-            .sign(
-                &self.bucket.client.ak_id,
-                &self.bucket.client.ak_secret,
-                Some(&self.bucket.bucket),
-                None,
-            )?
-            .send()
-            .await?;
+        //构建http请求
+        let response = send_to_oss(
+            &self.bucket.client,
+            Some(&self.bucket.bucket),
+            None,
+            Method::PUT,
+            None,
+            Some(&self.headers),
+            body.into(),
+        )?
+        .await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {

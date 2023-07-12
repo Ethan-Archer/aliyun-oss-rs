@@ -1,10 +1,10 @@
 use crate::{
-    common::{RegionInfo, RegionInfoList},
+    common::{OssInners, RegionInfo, RegionInfoList},
     error::normal_error,
-    sign::SignRequest,
+    send::send_to_oss,
     Error, OssClient,
 };
-use reqwest::Client;
+use hyper::{body::to_bytes, Body, Method};
 
 /// 查询地域的EndpPoint信息
 ///
@@ -20,43 +20,39 @@ use reqwest::Client;
 ///
 pub struct DescribeRegions {
     client: OssClient,
-    regions: Option<String>,
+    querys: OssInners,
 }
 
 impl DescribeRegions {
     pub(super) fn new(client: OssClient) -> Self {
-        DescribeRegions {
-            client,
-            regions: None,
-        }
+        let querys = OssInners::from("regions", "");
+        DescribeRegions { client, querys }
     }
 
     /// 指定查询单个地域信息，此处需要的是Region ID，比如 oss-cn-hangzhou
-    pub fn set_regions(mut self, regions: &str) -> Self {
-        self.regions = Some(regions.to_owned());
+    pub fn set_regions(mut self, regions: impl ToString) -> Self {
+        self.querys.insert("regions", regions);
         self
     }
 
     /// 发送请求
     pub async fn send(&self) -> Result<Vec<RegionInfo>, Error> {
         //构建http请求
-        let mut url = format!("https://{}/?regions", self.client.endpoint);
-        if let Some(regions) = &self.regions {
-            url.push_str("=");
-            url.push_str(&regions);
-        }
-        let req = Client::new().get(url);
-        //发送请求
-        let response = req
-            .sign(&self.client.ak_id, &self.client.ak_secret, None, None)?
-            .send()
-            .await?;
+        let response = send_to_oss(
+            &self.client,
+            None,
+            None,
+            Method::GET,
+            Some(&self.querys),
+            None,
+            Body::empty(),
+        )?
+        .await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {
             code if code.is_success() => {
-                let response_bytes = response
-                    .bytes()
+                let response_bytes = to_bytes(response.into_body())
                     .await
                     .map_err(|_| Error::OssInvalidResponse(None))?;
                 let regions: RegionInfoList = serde_xml_rs::from_reader(&*response_bytes)

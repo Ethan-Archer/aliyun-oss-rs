@@ -13,16 +13,12 @@ impl OssBucket {
     pub(crate) fn new(client: OssClient, bucket: &str) -> Self {
         OssBucket {
             client,
-            bucket: Cow::Owned(bucket.to_owned()),
+            bucket: bucket.to_owned().into(),
         }
     }
     /// 初始化OssObject
     pub fn object(&self, object: &str) -> OssObject {
-        OssObject::new(
-            self.client.clone(),
-            &self.bucket,
-            object.trim().trim_matches('/'),
-        )
+        OssObject::new(self.clone(), object.trim().trim_start_matches('/'))
     }
     /// 创建存储空间
     pub fn put_bucket(&self) -> PutBucket {
