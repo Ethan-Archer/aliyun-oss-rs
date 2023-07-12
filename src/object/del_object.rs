@@ -1,9 +1,4 @@
-use crate::{
-    common::{DelObjectResult, OssInners},
-    error::normal_error,
-    send::send_to_oss,
-    Error, OssObject,
-};
+use crate::{common::OssInners, error::normal_error, send::send_to_oss, Error, OssObject};
 use hyper::{Body, Method};
 
 /// 删除指定文件
@@ -24,21 +19,13 @@ impl DelObject {
             querys: OssInners::new(),
         }
     }
-    /// 设置版本id
-    ///
-    /// 只有开启了版本控制时才需要设置
-    ///
-    pub fn set_version_id(mut self, version_id: impl ToString) -> Self {
-        self.querys.insert("versionId", version_id);
-        self
-    }
     /// 发送请求
     ///
     /// 在开启了版本控制的情况下，返回值才有意义
     ///
     /// - 返回值 0 - x-oss-delete-marker标记
     /// - 返回值 1 - 版本ID，删除时如果未指定版本ID，则此返回值代表新增删除标记的版本ID，否则代表你主动指定的版本ID
-    pub async fn send(self) -> Result<DelObjectResult, Error> {
+    pub async fn send(self) -> Result<(), Error> {
         //构建http请求
         let response = send_to_oss(
             &self.object.client,
@@ -53,24 +40,7 @@ impl DelObject {
         //拆解响应消息
         let status_code = response.status();
         match status_code {
-            code if code.is_success() => {
-                let headers = response.headers();
-                let delete_marker = headers
-                    .get("x-oss-delete-marker")
-                    .map(|v| {
-                        v.to_str()
-                            .map(|v| if v == "true" { Some(true) } else { None })
-                            .unwrap_or_else(|_| None)
-                    })
-                    .flatten();
-                let version_id = headers
-                    .get("x-oss-version-id")
-                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
-                Ok(DelObjectResult {
-                    delete_marker,
-                    version_id,
-                })
-            }
+            code if code.is_success() => Ok(()),
             _ => Err(normal_error(response).await),
         }
     }

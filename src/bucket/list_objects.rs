@@ -1,13 +1,54 @@
-use std::cmp;
-
 use crate::{
-    common::{ObjectsList, OssInners},
+    common::{OssInners, Owner, StorageClass},
     error::normal_error,
     send::send_to_oss,
     Error, OssBucket,
 };
 use hyper::{body::to_bytes, Body, Method};
+use serde_derive::Deserialize;
+use std::cmp;
 
+// 返回内容
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ObjectsList {
+    // 列表继续请求的token
+    pub next_continuation_token: Option<String>,
+    // 文件列表
+    pub contents: Option<Vec<ObjectInfo>>,
+    // 分组列表
+    pub common_prefixes: Option<Vec<CommonPrefixes>>,
+}
+
+/// Object文件信息
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ObjectInfo {
+    /// Object路径
+    pub key: String,
+    /// Object最后修改时间
+    pub last_modified: String,
+    /// ETag在每个Object生成时创建，用于标识一个Object的内容，ETag值可以用于检查Object内容是否发生变化，不建议使用ETag值作为Object内容的MD5校验数据完整性的依据。
+    pub e_tag: String,
+    #[serde(rename = "Type")]
+    pub type_field: String,
+    /// Object大小，单位为字节
+    pub size: u64,
+    /// Object的存储类型
+    pub storage_class: StorageClass,
+    /// Object的解冻状态
+    pub restore_info: Option<String>,
+    /// Bucket拥有者信息
+    pub owner: Option<Owner>,
+}
+
+/// 分组列表
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct CommonPrefixes {
+    /// 前缀
+    pub prefix: String,
+}
 /// 列举存储空间中所有文件的信息
 ///
 /// 默认获取前1000条文件信息

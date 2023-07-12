@@ -1,13 +1,12 @@
-use std::collections::HashMap;
-
 use crate::{
-    common::{url_encode, Acl, CopyObjectResult, OssInners, StorageClass},
+    common::{url_encode, Acl, OssInners, StorageClass},
     error::{normal_error, Error},
     send::send_to_oss,
     OssObject,
 };
 use chrono::NaiveDateTime;
-use hyper::{body::to_bytes, Body, Method};
+use hyper::{Body, Method};
+use std::collections::HashMap;
 
 /// 拷贝文件
 ///
@@ -103,7 +102,7 @@ impl CopyObject {
 
     /// 复制文件
     ///
-    pub async fn send(mut self) -> Result<CopyObjectResult, Error> {
+    pub async fn send(mut self) -> Result<(), Error> {
         //插入标签
         let tags = self
             .tags
@@ -136,23 +135,7 @@ impl CopyObject {
         //拆解响应消息
         let status_code = response.status();
         match status_code {
-            code if code.is_success() => {
-                let version_id = response
-                    .headers()
-                    .get("x-oss-version-id")
-                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
-                let response_bytes = to_bytes(response.into_body())
-                    .await
-                    .map_err(|_| Error::OssInvalidResponse(None))?;
-                let result: CopyObjectResult = serde_xml_rs::from_reader(&*response_bytes)
-                    .map_err(|_| Error::OssInvalidResponse(Some(response_bytes)))?;
-                let result = CopyObjectResult {
-                    version_id,
-                    e_tag: result.e_tag.trim_matches('"').to_owned(),
-                    ..result
-                };
-                Ok(result)
-            }
+            code if code.is_success() => Ok(()),
             _ => Err(normal_error(response).await),
         }
     }

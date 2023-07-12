@@ -4,55 +4,6 @@ use hyper::{body::to_bytes, Body, Method};
 use md5::{Digest, Md5};
 use serde_derive::Deserialize;
 use std::collections::HashSet;
-use std::hash::{Hash, Hasher};
-
-/// 文件路径和版本信息
-#[derive(Debug)]
-pub struct ObjectWithVersion {
-    /// 文件路径
-    pub key: String,
-    /// 文件版本
-    pub version_id: Option<String>,
-}
-
-impl ObjectWithVersion {
-    pub fn new(file: impl ToString) -> Self {
-        ObjectWithVersion {
-            key: file.to_string(),
-            version_id: None,
-        }
-    }
-    pub fn new_with_version(file: impl ToString, version_id: impl ToString) -> Self {
-        ObjectWithVersion {
-            key: file.to_string(),
-            version_id: Some(version_id.to_string()),
-        }
-    }
-    pub fn to_string(&self) -> String {
-        match &self.version_id {
-            Some(version_id) => format!(
-                "<Object><Key>{}</Key><VersionId>{}</VersionId></Object>",
-                self.key, version_id
-            ),
-            None => format!("<Object><Key>{}</Key></Object>", self.key),
-        }
-    }
-}
-
-impl Eq for ObjectWithVersion {}
-
-impl PartialEq for ObjectWithVersion {
-    fn eq(&self, other: &Self) -> bool {
-        self.key == other.key && self.version_id == other.version_id
-    }
-}
-
-impl Hash for ObjectWithVersion {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.key.hash(state);
-        self.version_id.hash(state);
-    }
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename = "DeleteResult")]
@@ -66,12 +17,8 @@ pub(crate) struct DeleteObjectsResult {
 pub struct DeletedObject {
     #[serde(rename = "Key")]
     pub key: String,
-    #[serde(rename = "VersionId")]
-    pub version_id: String,
     #[serde(rename = "DeleteMarker")]
     pub delete_marker: Option<String>,
-    #[serde(rename = "DeleteMarkerVersionId")]
-    pub delete_marker_version_id: Option<String>,
 }
 
 /// 批量删除文件
@@ -82,10 +29,10 @@ pub struct DeletedObject {
 pub struct DelObjects {
     bucket: OssBucket,
     querys: OssInners,
-    objects: HashSet<ObjectWithVersion>,
+    objects: HashSet<String>,
 }
 impl DelObjects {
-    pub(super) fn new(bucket: OssBucket, files: Vec<ObjectWithVersion>) -> Self {
+    pub(super) fn new(bucket: OssBucket, files: Vec<impl ToString>) -> Self {
         let querys = OssInners::from("delete", "");
         let len = files.len();
         let objects = if len == 0 {
@@ -93,7 +40,7 @@ impl DelObjects {
         } else {
             let mut objects = HashSet::with_capacity(len);
             for object in files {
-                objects.insert(object);
+                objects.insert(object.to_string());
             }
             objects
         };
@@ -105,14 +52,14 @@ impl DelObjects {
     }
     /// 添加要删除的文件
     ///
-    pub fn add_files(mut self, files: Vec<ObjectWithVersion>) -> Self {
+    pub fn add_files(mut self, files: Vec<impl ToString>) -> Self {
         let len = files.len();
         if len == 0 {
             self
         } else {
             self.objects.reserve(len);
             for object in files {
-                self.objects.insert(object);
+                self.objects.insert(object.to_string());
             }
             self
         }
@@ -125,7 +72,7 @@ impl DelObjects {
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Delete><Quiet>false</Quiet>{}</Delete>",
             self.objects
                 .iter()
-                .map(|v| v.to_string())
+                .map(|v| format!("<Object><Key>{}</Key></Object>", v))
                 .collect::<Vec<_>>()
                 .join("")
         );

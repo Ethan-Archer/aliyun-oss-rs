@@ -1,10 +1,55 @@
 use crate::{
-    common::{ListAllMyBuckets, ListAllMyBucketsResult, OssInners},
+    common::{OssInners, StorageClass},
     error::normal_error,
     send::send_to_oss,
     Error, OssClient,
 };
 use hyper::{body::to_bytes, Body, Method};
+use serde_derive::Deserialize;
+
+//返回值
+/// Bucket基础信息
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct BucketBase {
+    /// Bucket名称
+    pub name: String,
+    /// 所在地域
+    pub region: String,
+    /// 所在地域在oss服务中的标识
+    pub location: String,
+    ///外网endpoint
+    pub extranet_endpoint: String,
+    /// 内网endpoint
+    pub intranet_endpoint: String,
+    /// 存储类型    
+    pub storage_class: StorageClass,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct Buckets {
+    pub bucket: Option<Vec<BucketBase>>,
+}
+
+// 查询存储空间列表的结果集合
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct ListAllMyBucketsResult {
+    /// 如果一次查询未穷尽所有存储空间，next_marker则可用于下一次继续查询
+    pub next_marker: Option<String>,
+    /// 存储空间列表
+    pub buckets: Buckets,
+}
+
+/// 查询存储空间列表的结果集合
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ListAllMyBuckets {
+    /// 如果一次查询未穷尽所有存储空间，next_marker则可用于下一次继续查询
+    pub next_marker: Option<String>,
+    /// 存储空间列表
+    pub buckets: Option<Vec<BucketBase>>,
+}
 
 /// 查询存储空间列表
 ///

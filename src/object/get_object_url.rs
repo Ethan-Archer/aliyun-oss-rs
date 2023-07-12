@@ -21,7 +21,6 @@ pub struct GetObjectUrl {
     subnet_mask: Option<u8>,
     vpc_id: Option<String>,
     forward_allow: bool,
-    version_id: Option<String>,
     response_mime: Option<Mime>,
     charset: Option<String>,
     response_cache_control: Option<CacheControl>,
@@ -38,7 +37,6 @@ impl GetObjectUrl {
             subnet_mask: None,
             vpc_id: None,
             forward_allow: false,
-            version_id: None,
             response_mime: None,
             charset: None,
             response_cache_control: None,
@@ -68,14 +66,6 @@ impl GetObjectUrl {
     ///
     pub fn enable_forward_allow(mut self) -> Self {
         self.forward_allow = true;
-        self
-    }
-    /// 设置版本id
-    ///
-    /// 只有开启了版本控制时才需要设置
-    ///
-    pub fn set_version_id(mut self, version_id: &str) -> Self {
-        self.version_id = Some(version_id.to_owned());
         self
     }
     /// 设置响应时的content-type
@@ -135,10 +125,6 @@ impl GetObjectUrl {
                 mime_str.push_str(&charset);
             }
             sub_resource.insert("response-content-type", mime_str);
-        }
-        //插入version_id
-        if let Some(version_id) = self.version_id {
-            sub_resource.insert("versionId", version_id);
         }
         //插入cache_control
         if let Some(cache_control) = self.response_cache_control {

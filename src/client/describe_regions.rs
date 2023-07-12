@@ -1,10 +1,28 @@
-use crate::{
-    common::{OssInners, RegionInfo, RegionInfoList},
-    error::normal_error,
-    send::send_to_oss,
-    Error, OssClient,
-};
+use crate::{common::OssInners, error::normal_error, send::send_to_oss, Error, OssClient};
 use hyper::{body::to_bytes, Body, Method};
+use serde_derive::Deserialize;
+
+// 返回内容
+/// Region基础信息
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct RegionInfo {
+    /// 地域ID
+    pub region: String,
+    /// 地域对应的传输加速Endpoint
+    pub accelerate_endpoint: String,
+    /// 地域对应的内网Endpoint
+    pub internal_endpoint: String,
+    /// 地域对应的外网Endpoint
+    pub internet_endpoint: String,
+}
+
+#[doc(hidden)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct RegionInfoList {
+    pub region_info: Vec<RegionInfo>,
+}
 
 /// 查询地域的EndpPoint信息
 ///

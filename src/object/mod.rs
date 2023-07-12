@@ -10,7 +10,6 @@ pub use self::get_object_url::GetObjectUrl;
 #[doc(hidden)]
 pub use self::oss_object::OssObject;
 pub use self::put_object::PutObject;
-pub use list_object_versions::ListObjectVersions;
 
 mod append_object;
 mod copy_object;
@@ -19,6 +18,5 @@ mod get_object;
 mod get_object_meta;
 mod get_object_tagging;
 mod get_object_url;
-mod list_object_versions;
 mod oss_object;
 mod put_object;

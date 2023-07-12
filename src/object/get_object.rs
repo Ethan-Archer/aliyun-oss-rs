@@ -25,14 +25,6 @@ impl GetObject {
             querys: OssInners::new(),
         }
     }
-    /// 设置版本id
-    ///
-    /// 只有开启了版本控制时才需要设置
-    ///
-    pub fn set_version_id(mut self, version_id: impl ToString) -> Self {
-        self.querys.insert("versionId", version_id);
-        self
-    }
     /// 设置响应时的range
     ///
     /// end应该大于等于start，并且两者都在合法索引范围内，如果设置的值不合法，则将下载文件的所有内容

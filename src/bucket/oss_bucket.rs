@@ -1,7 +1,4 @@
-use super::{
-    del_objects_onversion::ObjectWithVersion, DelBucket, DelObjects, GetBucketInfo, GetBucketStat,
-    ListObjects, PutBucket,
-};
+use super::{DelBucket, DelObjects, GetBucketInfo, GetBucketStat, ListObjects, PutBucket};
 use crate::{OssClient, OssObject};
 use std::borrow::Cow;
 
@@ -44,7 +41,7 @@ impl OssBucket {
         GetBucketStat::new(self.clone())
     }
     /// 查询存储空间的存储容量和文件数量
-    pub fn del_objects(&self, files: Vec<ObjectWithVersion>) -> DelObjects {
+    pub fn del_objects(&self, files: Vec<impl ToString>) -> DelObjects {
         DelObjects::new(self.clone(), files)
     }
 }

@@ -1,7 +1,5 @@
 use crate::{
-    common::{
-        url_encode, Acl, CacheControl, ContentDisposition, OssInners, PutObjectResult, StorageClass,
-    },
+    common::{url_encode, Acl, CacheControl, ContentDisposition, OssInners, StorageClass},
     error::{normal_error, Error},
     send::send_to_oss,
     OssObject,
@@ -99,7 +97,7 @@ impl PutObject {
     }
     /// 将磁盘中的文件上传到OSS
     ///
-    pub async fn send_file(mut self, file: &str) -> Result<PutObjectResult, Error> {
+    pub async fn send_file(mut self, file: &str) -> Result<(), Error> {
         //生成文件类型
         let file_type = match self.mime {
             Some(mime) => mime,
@@ -169,22 +167,13 @@ impl PutObject {
         //拆解响应消息
         let status_code = response.status();
         match status_code {
-            code if code.is_success() => {
-                let headers = response.headers();
-                let e_tag = headers.get("ETag").and_then(|header| {
-                    header.to_str().ok().map(|s| s.trim_matches('"').to_owned())
-                });
-                let version_id = headers
-                    .get("x-oss-version-id")
-                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
-                Ok(PutObjectResult { e_tag, version_id })
-            }
+            code if code.is_success() => Ok(()),
             _ => Err(normal_error(response).await),
         }
     }
     /// 将内存中的数据上传到OSS
     ///
-    pub async fn send_content(mut self, content: Vec<u8>) -> Result<PutObjectResult, Error> {
+    pub async fn send_content(mut self, content: Vec<u8>) -> Result<(), Error> {
         //生成文件类型
         let content_type = match self.mime {
             Some(mime) => mime,
@@ -235,16 +224,7 @@ impl PutObject {
         //拆解响应消息
         let status_code = response.status();
         match status_code {
-            code if code.is_success() => {
-                let headers = response.headers();
-                let e_tag = headers.get("ETag").and_then(|header| {
-                    header.to_str().ok().map(|s| s.trim_matches('"').to_owned())
-                });
-                let version_id = headers
-                    .get("x-oss-version-id")
-                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
-                Ok(PutObjectResult { e_tag, version_id })
-            }
+            code if code.is_success() => Ok(()),
             _ => Err(normal_error(response).await),
         }
     }

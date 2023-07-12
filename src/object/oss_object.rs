@@ -1,6 +1,6 @@
 use super::{
     del_object::DelObject, AppendObject, CopyObject, GetObject, GetObjectMeta, GetObjectTagging,
-    GetObjectUrl, ListObjectVersions, PutObject,
+    GetObjectUrl, PutObject,
 };
 use crate::{OssBucket, OssClient};
 use chrono::NaiveDateTime;
@@ -53,9 +53,5 @@ impl OssObject {
     /// 复制文件
     pub fn copy_object(&self, copy_source: &str) -> CopyObject {
         CopyObject::new(self.clone(), copy_source)
-    }
-    /// 获取文件的标签信息
-    pub fn list_object_versions(&self) -> ListObjectVersions {
-        ListObjectVersions::new(self.client.clone(), &self.bucket, &self.object)
     }
 }

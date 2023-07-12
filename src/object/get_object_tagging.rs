@@ -1,10 +1,28 @@
-use crate::{
-    common::{OssInners, Tag, Tagging},
-    error::normal_error,
-    send::send_to_oss,
-    Error, OssObject,
-};
+use crate::{common::OssInners, error::normal_error, send::send_to_oss, Error, OssObject};
 use hyper::{body::to_bytes, Body, Method};
+use serde_derive::Deserialize;
+
+// 返回的内容
+#[derive(Debug, Deserialize)]
+pub(crate) struct Tagging {
+    #[serde(rename = "TagSet")]
+    pub tag_set: TagSet,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct TagSet {
+    #[serde(rename = "Tag")]
+    pub tags: Option<Vec<Tag>>,
+}
+
+#[derive(Debug, Deserialize)]
+/// 标签信息
+pub struct Tag {
+    #[serde(rename = "Key")]
+    pub key: String,
+    #[serde(rename = "Value")]
+    pub value: String,
+}
 
 /// 获取文件的标签信息
 ///
@@ -17,14 +35,6 @@ impl GetObjectTagging {
     pub(super) fn new(object: OssObject) -> Self {
         let querys = OssInners::from("tagging", "");
         GetObjectTagging { object, querys }
-    }
-    /// 设置版本id
-    ///
-    /// 只有开启了版本控制时才需要设置
-    ///
-    pub fn set_version_id(mut self, version_id: impl ToString) -> Self {
-        self.querys.insert("versionId", version_id);
-        self
     }
     /// 发送请求
     ///

@@ -1,8 +1,5 @@
 use crate::{
-    common::{
-        url_encode, Acl, AppendObjectResult, CacheControl, ContentDisposition, OssInners,
-        StorageClass,
-    },
+    common::{url_encode, Acl, CacheControl, ContentDisposition, OssInners, StorageClass},
     error::{normal_error, Error},
     send::send_to_oss,
     OssObject,
@@ -109,7 +106,7 @@ impl AppendObject {
     ///
     /// 如果设置了上传进度的回调方法，调用者将会实时获得最新的上传进度
     ///
-    pub async fn send_file(mut self, file: &str) -> Result<AppendObjectResult, Error> {
+    pub async fn send_file(mut self, file: &str) -> Result<Option<String>, Error> {
         //生成文件类型
         let file_type = match self.mime {
             Some(mime) => mime.to_string(),
@@ -180,28 +177,18 @@ impl AppendObject {
         let status_code = response.status();
         match status_code {
             code if code.is_success() => {
-                let headers = response.headers();
-                let crc64ecma = headers
-                    .get("x-oss-hash-crc64ecma")
-                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
-                let version_id = headers
-                    .get("x-oss-version-id")
-                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
-                let next_position = headers
+                let next_position = response
+                    .headers()
                     .get("x-oss-next-append-position")
                     .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
-                Ok(AppendObjectResult {
-                    next_position,
-                    crc64ecma,
-                    version_id,
-                })
+                Ok(next_position)
             }
             _ => Err(normal_error(response).await),
         }
     }
     /// 将内存中的数据上传到OSS
     ///
-    pub async fn send_content(mut self, content: Vec<u8>) -> Result<AppendObjectResult, Error> {
+    pub async fn send_content(mut self, content: Vec<u8>) -> Result<Option<String>, Error> {
         //读取文件大小
         let content_size = content.len() as u64;
         if content_size >= 5_000_000_000 {
@@ -253,22 +240,11 @@ impl AppendObject {
         let status_code = response.status();
         match status_code {
             code if code.is_success() => {
-                let headers = response.headers();
-                let crc64ecma = headers
-                    .get("x-oss-hash-crc64ecma")
-                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()))
-                    .map(|v| v.replace("\"", ""));
-                let version_id = headers
-                    .get("x-oss-version-id")
-                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
-                let next_position = headers
+                let next_position = response
+                    .headers()
                     .get("x-oss-next-append-position")
                     .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
-                Ok(AppendObjectResult {
-                    next_position,
-                    crc64ecma,
-                    version_id,
-                })
+                Ok(next_position)
             }
             _ => Err(normal_error(response).await),
         }
