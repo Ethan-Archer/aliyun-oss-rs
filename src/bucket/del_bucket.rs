@@ -1,6 +1,5 @@
-use hyper::{Body, Method};
-
 use crate::{error::normal_error, send::send_to_oss, Error, OssBucket};
+use hyper::{Body, Method};
 
 /// 删除某个存储空间
 ///

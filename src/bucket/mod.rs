@@ -3,11 +3,12 @@
 #[doc(hidden)]
 pub use self::oss_bucket::OssBucket;
 pub use self::{
-    del_bucket::DelBucket, get_bucket_info::GetBucketInfo, get_bucket_stat::GetBucketStat,
-    list_objects::ListObjects, put_bucket::PutBucket,
+    del_bucket::DelBucket, del_objects_onversion::DelObjects, get_bucket_info::GetBucketInfo,
+    get_bucket_stat::GetBucketStat, list_objects::ListObjects, put_bucket::PutBucket,
 };
 
 mod del_bucket;
+mod del_objects_onversion;
 mod get_bucket_info;
 mod get_bucket_stat;
 mod list_objects;

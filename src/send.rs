@@ -108,6 +108,7 @@ pub(crate) fn send_to_oss(
     let date = Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string();
     //提取header数据
     let mut content_type = String::new();
+    let mut content_md5 = String::new();
     let mut canonicalized_ossheaders =
         Vec::with_capacity(headers.map(|headers| headers.len()).unwrap_or(0));
     if let Some(headers) = headers {
@@ -117,6 +118,9 @@ pub(crate) fn send_to_oss(
             };
             if key.starts_with(&header::CONTENT_TYPE.to_string()) {
                 content_type = value.to_string();
+            };
+            if key == "Content-MD5" {
+                content_md5 = value.to_string();
             };
         });
     }
@@ -154,8 +158,8 @@ pub(crate) fn send_to_oss(
     }
     //生成待签名字符串
     let unsign_str = format!(
-        "{}\n\n{}\n{}\n{}{}",
-        method, content_type, date, canonicalized_ossheaders, canonicalized_resource
+        "{}\n{}\n{}\n{}\n{}{}",
+        method, content_md5, content_type, date, canonicalized_ossheaders, canonicalized_resource
     );
     //计算签名值
     let key_str = hmac::Key::new(

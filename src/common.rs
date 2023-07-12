@@ -3,6 +3,7 @@
 //!
 use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use serde_derive::{Deserialize, Serialize};
+use std::hash::{Hash, Hasher};
 use std::{
     collections::{hash_map::Iter, HashMap},
     fmt,
@@ -34,27 +35,6 @@ impl OssInners {
     }
     pub fn insert(&mut self, key: impl ToString, value: impl ToString) {
         self.inners.insert(key.to_string(), value.to_string());
-    }
-    pub fn insert_tag(&mut self, key: impl ToString, value: Option<impl ToString>) {
-        let mut tags = self
-            .inners
-            .get("x-oss-tagging")
-            .map(|v| v.to_string())
-            .unwrap_or_else(|| String::new());
-        let new_tag = if let Some(value) = value {
-            format!(
-                "{}={}",
-                url_encode(&key.to_string()),
-                url_encode(&value.to_string())
-            )
-        } else {
-            url_encode(&key.to_string())
-        };
-        if !tags.is_empty() {
-            tags.push_str("&");
-        }
-        tags.push_str(&new_tag);
-        self.inners.insert("x-oss-tagging".to_string(), tags);
     }
     pub fn len(&self) -> usize {
         self.inners.len()
