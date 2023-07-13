@@ -12,7 +12,7 @@ description = "A non-official Rust SDK implementation for Alibaba Cloud OSS."
 base64 = "0.21.2"
 bytes = "1.4.0"
 chrono = "0.4.25"
-futures-util = { version = "=0.3.28", default-features = false }
+futures-util = { version = "0.3.28", default-features = false }
 hyper = { version = "0.14.27", features = ["stream", "http1", "tcp", "client"] }
 hyper-tls = "0.5.0"
 infer = "0.13.0"
