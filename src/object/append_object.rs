@@ -1,12 +1,10 @@
 use crate::{
-    common::{url_encode, Acl, CacheControl, ContentDisposition, OssInners, StorageClass},
+    common::{url_encode, Acl, CacheControl, ContentDisposition, StorageClass},
     error::{normal_error, Error},
-    send::send_to_oss,
-    OssObject,
+    request::{Oss, OssRequest},
 };
 use futures_util::StreamExt;
 use hyper::{header, Body, Method};
-use mime_guess::Mime;
 use std::collections::HashMap;
 use tokio::{fs::File, io::BufReader};
 use tokio_util::io::ReaderStream;
@@ -19,22 +17,19 @@ use tokio_util::io::ReaderStream;
 ///
 /// 追加文件的逻辑和限制较为复杂，建议仔细阅读 [阿里云官方文档](https://help.aliyun.com/document_detail/31978.html)
 pub struct AppendObject {
-    object: OssObject,
-    headers: OssInners,
-    querys: OssInners,
-    mime: Option<Mime>,
+    req: OssRequest,
+    mime: Option<String>,
     tags: HashMap<String, String>,
     callback: Option<Box<dyn Fn(u64, u64) + Send + Sync + 'static>>,
 }
 
 impl AppendObject {
-    pub(super) fn new(object: OssObject) -> Self {
-        let mut querys = OssInners::from("append", "");
-        querys.insert("position", "0");
+    pub(super) fn new(oss: Oss) -> Self {
+        let mut req = OssRequest::new(oss, Method::POST);
+        req.insert_query("append", "");
+        req.insert_query("position", "0");
         AppendObject {
-            object,
-            headers: OssInners::new(),
-            querys,
+            req,
             mime: None,
             tags: HashMap::new(),
             callback: None,
@@ -42,44 +37,46 @@ impl AppendObject {
     }
     /// 设置追加内容的起点
     pub fn set_position(mut self, position: u32) -> Self {
-        self.querys.insert("position", position);
+        self.req.insert_query("position", position);
         self
     }
     /// 设置文件的mime类型
-    pub fn set_mime(mut self, mime: Mime) -> Self {
-        self.mime = Some(mime);
+    ///
+    /// 如果未设置mime类型，请求发送时，会尝试从内容、本地路径、远程路径获取mime，如果依然未获取成功，则使用默认mime类型（application/octet-stream）
+    pub fn set_mime(mut self, mime: impl ToString) -> Self {
+        self.mime = Some(mime.to_string());
         self
     }
     /// 设置文件的访问权限
     pub fn set_acl(mut self, acl: Acl) -> Self {
-        self.headers.insert("x-oss-object-acl", acl);
+        self.req.insert_header("x-oss-object-acl", acl);
         self
     }
     /// 设置文件的存储类型
     pub fn set_storage_class(mut self, storage_class: StorageClass) -> Self {
-        self.headers.insert("x-oss-storage-class", storage_class);
+        self.req.insert_header("x-oss-storage-class", storage_class);
         self
     }
     /// 文件被下载时网页的缓存行为
     pub fn set_cache_control(mut self, cache_control: CacheControl) -> Self {
-        self.headers.insert(header::CACHE_CONTROL, cache_control);
+        self.req.insert_header(header::CACHE_CONTROL, cache_control);
         self
     }
     /// 设置文件的展示形式
     pub fn set_content_disposition(mut self, content_disposition: ContentDisposition) -> Self {
-        self.headers
-            .insert(header::CONTENT_DISPOSITION, content_disposition);
+        self.req
+            .insert_header(header::CONTENT_DISPOSITION, content_disposition);
         self
     }
     /// 不允许覆盖同名文件
     pub fn forbid_overwrite(mut self) -> Self {
-        self.headers.insert("x-oss-forbid-overwrite", "true");
+        self.req.insert_header("x-oss-forbid-overwrite", "true");
         self
     }
     /// 设置需要附加的metadata
     pub fn set_meta(mut self, key: impl ToString, value: impl ToString) -> Self {
-        self.headers
-            .insert(format!("x-oss-meta-{}", key.to_string()), value);
+        self.req
+            .insert_header(format!("x-oss-meta-{}", key.to_string()), value);
         self
     }
     /// 设置标签信息
@@ -106,20 +103,28 @@ impl AppendObject {
     ///
     /// 如果设置了上传进度的回调方法，调用者将会实时获得最新的上传进度
     ///
-    pub async fn send_file(mut self, file: &str) -> Result<Option<String>, Error> {
+    pub async fn send_file(mut self, file: impl ToString) -> Result<Option<String>, Error> {
         //生成文件类型
         let file_type = match self.mime {
-            Some(mime) => mime.to_string(),
-            None => match infer::get_from_path(file)? {
+            Some(mime) => mime,
+            None => match infer::get_from_path(&file.to_string())? {
                 Some(ext) => ext.mime_type().to_owned(),
-                None => mime_guess::from_path(&*self.object.object)
-                    .first()
-                    .map(|v| v.to_string())
-                    .unwrap_or_else(|| "application/octet-stream".to_owned())
-                    .to_string(),
+                None => mime_guess::from_path(
+                    &self
+                        .req
+                        .oss
+                        .object
+                        .clone()
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| String::new()),
+                )
+                .first()
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "application/octet-stream".to_owned())
+                .to_string(),
             },
         };
-        self.headers.insert(header::CONTENT_TYPE, file_type);
+        self.req.insert_header(header::CONTENT_TYPE, file_type);
         //插入标签
         let tags = self
             .tags
@@ -137,9 +142,9 @@ impl AppendObject {
             })
             .collect::<Vec<_>>()
             .join("&");
-        self.headers.insert("x-oss-tagging", tags);
+        self.req.insert_header("x-oss-tagging", tags);
         //打开文件
-        let file = File::open(file).await?;
+        let file = File::open(file.to_string()).await?;
         //读取文件大小
         let file_size = file.metadata().await?.len();
         if file_size >= 5_000_000_000 {
@@ -162,17 +167,9 @@ impl AppendObject {
             }
             Err(err) => Err(err),
         }));
+        self.req.set_body(body);
         //构建http请求
-        let response = send_to_oss(
-            &self.object.client,
-            Some(&self.object.bucket),
-            Some(&self.object.object),
-            Method::POST,
-            None,
-            Some(&self.headers),
-            body,
-        )?
-        .await?;
+        let response = self.req.send_to_oss()?.await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {
@@ -196,17 +193,24 @@ impl AppendObject {
         }
         //生成文件类型
         let content_type = match self.mime {
-            Some(mime) => mime.to_string(),
+            Some(mime) => mime,
             None => match infer::get(&content) {
                 Some(ext) => ext.mime_type().to_string(),
-                None => mime_guess::from_path(&*self.object.object)
-                    .first()
-                    .map(|v| v.to_string())
-                    .unwrap_or_else(|| "application/octet-stream".to_owned())
-                    .to_string(),
+                None => mime_guess::from_path(
+                    self.req
+                        .oss
+                        .object
+                        .clone()
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| String::new().into()),
+                )
+                .first()
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "application/octet-stream".to_owned())
+                .to_string(),
             },
         };
-        self.headers.insert(header::CONTENT_TYPE, content_type);
+        self.req.insert_header(header::CONTENT_TYPE, content_type);
         //插入标签
         let tags = self
             .tags
@@ -224,18 +228,9 @@ impl AppendObject {
             })
             .collect::<Vec<_>>()
             .join("&");
-        self.headers.insert("x-oss-tagging", tags);
+        self.req.insert_header("x-oss-tagging", tags);
         //构建http请求
-        let response = send_to_oss(
-            &self.object.client,
-            Some(&self.object.bucket),
-            Some(&self.object.object),
-            Method::POST,
-            None,
-            Some(&self.headers),
-            Body::from(content),
-        )?
-        .await?;
+        let response = self.req.send_to_oss()?.await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {

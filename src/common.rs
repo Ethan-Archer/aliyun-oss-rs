@@ -1,12 +1,9 @@
-//! 本地定义的各种数据
+//! 公共数据定义
 //!
 //!
 use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use serde_derive::{Deserialize, Serialize};
-use std::{
-    collections::{hash_map::Iter, HashMap},
-    fmt,
-};
+use std::fmt;
 
 // -------------------------- 公共方法 --------------------------
 //编码查询参数值
@@ -16,32 +13,6 @@ pub(crate) fn url_encode(input: &str) -> String {
 }
 
 // -------------------------- 公共数据 --------------------------
-
-// 迭代器
-#[derive(Debug, Deserialize)]
-pub(crate) struct OssInners {
-    inners: HashMap<String, String>,
-}
-impl OssInners {
-    pub fn new() -> Self {
-        let inners = HashMap::with_capacity(10);
-        OssInners { inners }
-    }
-    pub fn from(key: impl ToString, value: impl ToString) -> Self {
-        let mut inners = HashMap::with_capacity(10);
-        inners.insert(key.to_string(), value.to_string());
-        OssInners { inners }
-    }
-    pub fn insert(&mut self, key: impl ToString, value: impl ToString) {
-        self.inners.insert(key.to_string(), value.to_string());
-    }
-    pub fn len(&self) -> usize {
-        self.inners.len()
-    }
-    pub fn iter(&self) -> Iter<'_, String, String> {
-        self.inners.iter()
-    }
-}
 
 /// 访问权限ACL
 #[derive(Debug, Deserialize, Clone)]
@@ -68,7 +39,7 @@ impl fmt::Display for Acl {
 }
 
 ///存储类型
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Copy)]
 pub enum StorageClass {
     /// 标准存储
     Standard,
@@ -94,7 +65,7 @@ impl fmt::Display for StorageClass {
 }
 
 ///数据容灾类型
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Copy)]
 pub enum DataRedundancyType {
     ///本地冗余LRS将您的数据冗余存储在同一个可用区的不同存储设备上，可支持两个存储设备并发损坏时，仍维持数据不丢失，可正常访问。
     LRS,

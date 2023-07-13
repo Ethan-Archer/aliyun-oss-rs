@@ -1,5 +1,9 @@
-use crate::{common::OssInners, error::normal_error, send::send_to_oss, Error, OssClient};
-use hyper::{body::to_bytes, Body, Method};
+use crate::{
+    error::normal_error,
+    request::{Oss, OssRequest},
+    Error,
+};
+use hyper::{body::to_bytes, Method};
 use serde_derive::Deserialize;
 
 // 返回内容
@@ -37,35 +41,34 @@ pub(crate) struct RegionInfoList {
 /// ```
 ///
 pub struct DescribeRegions {
-    client: OssClient,
-    querys: OssInners,
+    req: OssRequest,
 }
 
 impl DescribeRegions {
-    pub(super) fn new(client: OssClient) -> Self {
-        let querys = OssInners::from("regions", "");
-        DescribeRegions { client, querys }
+    pub(super) fn new(oss: Oss) -> Self {
+        let mut req = OssRequest::new(oss, Method::GET);
+        req.insert_query("regions", "");
+        DescribeRegions { req }
     }
 
     /// 指定查询单个地域信息，此处需要的是Region ID，比如 oss-cn-hangzhou
     pub fn set_regions(mut self, regions: impl ToString) -> Self {
-        self.querys.insert("regions", regions);
+        self.req.insert_query("regions", regions);
+        self
+    }
+
+    /// 指定从哪个EndPoint发起查询
+    ///
+    /// 默认为 oss.aliyuncs.com ，如你的网络无法访问，可以设置一个你可以访问的EndPoint
+    pub fn set_endpoint(mut self, endpoint: impl ToString) -> Self {
+        self.req.set_endpoint(endpoint);
         self
     }
 
     /// 发送请求
-    pub async fn send(&self) -> Result<Vec<RegionInfo>, Error> {
+    pub async fn send(self) -> Result<Vec<RegionInfo>, Error> {
         //构建http请求
-        let response = send_to_oss(
-            &self.client,
-            None,
-            None,
-            Method::GET,
-            Some(&self.querys),
-            None,
-            Body::empty(),
-        )?
-        .await?;
+        let response = self.req.send_to_oss()?.await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {

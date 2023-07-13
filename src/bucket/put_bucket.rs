@@ -1,8 +1,8 @@
 use crate::{
-    common::{Acl, DataRedundancyType, OssInners, StorageClass},
+    common::{Acl, DataRedundancyType, StorageClass},
     error::normal_error,
-    send::send_to_oss,
-    Error, OssBucket,
+    request::{Oss, OssRequest},
+    Error,
 };
 use hyper::Method;
 use serde_derive::Serialize;
@@ -21,23 +21,21 @@ struct CreateBucketConfiguration {
 ///
 /// 具体详情查阅 [阿里云官方文档](https://help.aliyun.com/document_detail/31959.html)
 pub struct PutBucket {
-    bucket: OssBucket,
-    headers: OssInners,
+    req: OssRequest,
     storage_class: Option<StorageClass>,
     data_redundancy_type: Option<DataRedundancyType>,
 }
 impl PutBucket {
-    pub(super) fn new(bucket: OssBucket) -> Self {
+    pub(super) fn new(oss: Oss) -> Self {
         PutBucket {
-            bucket,
-            headers: OssInners::new(),
+            req: OssRequest::new(oss, Method::PUT),
             storage_class: None,
             data_redundancy_type: None,
         }
     }
     /// 设置存储空间的访问权限
     pub fn set_acl(mut self, acl: Acl) -> Self {
-        self.headers.insert("x-oss-acl", acl);
+        self.req.insert_header("x-oss-acl", acl);
         self
     }
     /// 指定资源组ID
@@ -46,16 +44,28 @@ impl PutBucket {
     ///
     /// 如果在请求中未携带该请求头，则创建的存储空间属于默认资源组。
     pub fn set_group_id(mut self, group_id: impl ToString) -> Self {
-        self.headers.insert("x-oss-resource-group-id", group_id);
+        self.req.insert_header("x-oss-resource-group-id", group_id);
         self
     }
     /// 设置存储空间的存储类型
     pub fn set_storage_class(mut self, storage_class: StorageClass) -> Self {
+        let body_str = format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CreateBucketConfiguration>{}{}</CreateBucketConfiguration>",
+            storage_class.to_string(),
+            self.data_redundancy_type.map_or(String::new(),|v|format!("<DataRedundancyType>{}</DataRedundancyType>",v.to_string()))
+        );
         self.storage_class = Some(storage_class);
+        self.req.set_body(body_str.into());
         self
     }
     /// 设置存储空间的数据容灾类型
     pub fn set_redundancy_type(mut self, redundancy_type: DataRedundancyType) -> Self {
+        let body_str = format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CreateBucketConfiguration>{}{}</CreateBucketConfiguration>",
+            self.storage_class.map(|v|format!("<StorageClass>{}</StorageClass>",v.to_string())).unwrap_or_else(||String::new()),
+            redundancy_type.to_string()
+        );
+        self.req.set_body(body_str.into());
         self.data_redundancy_type = Some(redundancy_type);
         self
     }
@@ -72,16 +82,7 @@ impl PutBucket {
             };
         }
         //构建http请求
-        let response = send_to_oss(
-            &self.bucket.client,
-            Some(&self.bucket.bucket),
-            None,
-            Method::PUT,
-            None,
-            Some(&self.headers),
-            body.into(),
-        )?
-        .await?;
+        let response = self.req.send_to_oss()?.await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {

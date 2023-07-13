@@ -1,5 +1,9 @@
-use crate::{common::OssInners, error::normal_error, send::send_to_oss, Error, OssObject};
-use hyper::{Body, Method};
+use crate::{
+    error::normal_error,
+    request::{Oss, OssRequest},
+    Error,
+};
+use hyper::Method;
 
 /// 删除指定文件
 ///
@@ -9,14 +13,12 @@ use hyper::{Body, Method};
 ///
 /// 具体详情查阅 [阿里云官方文档](https://help.aliyun.com/document_detail/31982.html)
 pub struct DelObject {
-    object: OssObject,
-    querys: OssInners,
+    req: OssRequest,
 }
 impl DelObject {
-    pub(super) fn new(object: OssObject) -> Self {
+    pub(super) fn new(oss: Oss) -> Self {
         DelObject {
-            object,
-            querys: OssInners::new(),
+            req: OssRequest::new(oss, Method::DELETE),
         }
     }
     /// 发送请求
@@ -27,16 +29,7 @@ impl DelObject {
     /// - 返回值 1 - 版本ID，删除时如果未指定版本ID，则此返回值代表新增删除标记的版本ID，否则代表你主动指定的版本ID
     pub async fn send(self) -> Result<(), Error> {
         //构建http请求
-        let response = send_to_oss(
-            &self.object.client,
-            Some(&self.object.bucket),
-            Some(&self.object.object),
-            Method::DELETE,
-            Some(&self.querys),
-            None,
-            Body::empty(),
-        )?
-        .await?;
+        let response = self.req.send_to_oss()?.await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {

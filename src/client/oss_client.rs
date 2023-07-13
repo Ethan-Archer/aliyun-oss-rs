@@ -1,17 +1,10 @@
 use super::{DescribeRegions, ListBuckets};
-use crate::OssBucket;
-use std::borrow::Cow;
+use crate::{request::Oss, OssBucket};
 
-/// OSS容器入口，可以转换为OssBucket和OssObject，同时也实现了查询地域信息和查询bucket列表两个API
-// #[doc(hidden)]
+/// OSS容器入口，实现了查询OSS开服地域信息和查询存储空间列表两个API
 #[derive(Debug, Clone)]
 pub struct OssClient {
-    /// 阿里云AccessKey ID
-    pub(crate) ak_id: Cow<'static, str>,
-    /// 阿里云AccessKey Secret
-    pub(crate) ak_secret: Cow<'static, str>,
-    /// 地域的OSS endpoint
-    pub(crate) endpoint: Cow<'static, str>,
+    pub(crate) oss: Oss,
 }
 
 impl OssClient {
@@ -19,28 +12,27 @@ impl OssClient {
     ///
     /// - ak_id ： 阿里云AccessKey ID
     /// - ak_secret：阿里云AccessKey Secret
-    /// - endpoint：地域的OSS endpoint
     ///
-    pub fn new(ak_id: &str, ak_secret: &str, endpoint: &str) -> Self {
+    pub fn new(ak_id: &str, ak_secret: &str) -> Self {
         OssClient {
-            ak_id: ak_id.to_owned().into(),
-            ak_secret: ak_secret.to_owned().into(),
-            endpoint: endpoint.to_owned().into(),
+            oss: Oss::new(ak_id, ak_secret),
         }
     }
-
-    /// 初始化OssBucket
-    pub fn bucket(&self, bucket: &str) -> OssBucket {
-        OssBucket::new(self.clone(), bucket)
+    /// 禁用https
+    pub fn disable_https(mut self) -> Self {
+        self.oss.set_https(false);
+        self
     }
-
+    /// 初始化OssBucket
+    pub fn bucket(&self, bucket: &str, endpoint: &str) -> OssBucket {
+        OssBucket::new(self.oss.clone(), bucket, endpoint)
+    }
     /// 查询所有地域的Endpoint信息
     pub fn describe_regions(&self) -> DescribeRegions {
-        DescribeRegions::new(self.clone())
+        DescribeRegions::new(self.oss.clone())
     }
-
     /// 查询已创建的所有存储空间
     pub fn list_buckets(&self) -> ListBuckets {
-        ListBuckets::new(self.clone())
+        ListBuckets::new(self.oss.clone())
     }
 }

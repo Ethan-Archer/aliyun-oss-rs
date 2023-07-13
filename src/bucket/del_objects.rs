@@ -1,6 +1,10 @@
-use crate::{common::OssInners, error::normal_error, send::send_to_oss, Error, OssBucket};
+use crate::{
+    error::normal_error,
+    request::{Oss, OssRequest},
+    Error,
+};
 use base64::{engine::general_purpose, Engine};
-use hyper::{body::to_bytes, Body, Method};
+use hyper::{body::to_bytes, Method};
 use md5::{Digest, Md5};
 use serde_derive::Deserialize;
 use std::collections::HashSet;
@@ -27,27 +31,25 @@ pub struct DeletedObject {
 ///
 /// 具体详情查阅 [阿里云官方文档](https://help.aliyun.com/document_detail/31983.html)
 pub struct DelObjects {
-    bucket: OssBucket,
-    querys: OssInners,
+    req: OssRequest,
     objects: HashSet<String>,
 }
 impl DelObjects {
-    pub(super) fn new(bucket: OssBucket, files: Vec<impl ToString>) -> Self {
-        let querys = OssInners::from("delete", "");
+    pub(super) fn new(oss: Oss, files: Vec<impl ToString>) -> Self {
+        let mut req = OssRequest::new(oss, Method::GET);
+        req.insert_query("delete", "");
         let len = files.len();
-        let objects = if len == 0 {
-            HashSet::new()
+        if len == 0 {
+            DelObjects {
+                req,
+                objects: HashSet::new(),
+            }
         } else {
             let mut objects = HashSet::with_capacity(len);
             for object in files {
                 objects.insert(object.to_string());
             }
-            objects
-        };
-        DelObjects {
-            bucket,
-            querys,
-            objects,
+            DelObjects { req, objects }
         }
     }
     /// 添加要删除的文件
@@ -66,8 +68,8 @@ impl DelObjects {
     }
     /// 发送请求
     ///
-    pub async fn send(self) -> Result<Vec<DeletedObject>, Error> {
-        // 生成body内容
+    pub async fn send(mut self) -> Result<Vec<DeletedObject>, Error> {
+        //生成body
         let body = format!(
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Delete><Quiet>false</Quiet>{}</Delete>",
             self.objects
@@ -83,20 +85,13 @@ impl DelObjects {
         hasher.update(&body);
         let result = hasher.finalize();
         let body_md5 = general_purpose::STANDARD.encode(&result);
-        //生成header内容
-        let mut headers = OssInners::from("Content-Length", body_len);
-        headers.insert("Content-MD5", body_md5);
+        //插入body内容
+        self.req.set_body(body.into());
+        //插入header内容
+        self.req.insert_header("Content-Length", body_len);
+        self.req.insert_header("Content-MD5", body_md5);
         //构建http请求
-        let response = send_to_oss(
-            &self.bucket.client,
-            Some(&self.bucket.bucket),
-            None,
-            Method::POST,
-            Some(&self.querys),
-            Some(&headers),
-            Body::from(body),
-        )?
-        .await?;
+        let response = self.req.send_to_oss()?.await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {

@@ -1,7 +1,11 @@
-use crate::{common::OssInners, send::send_to_oss, Error, OssObject};
+use crate::{
+    error::OssError,
+    request::{Oss, OssRequest},
+    Error,
+};
 use base64::{engine::general_purpose, Engine};
 use bytes::Bytes;
-use hyper::{Body, Method};
+use hyper::Method;
 use serde_derive::Deserialize;
 
 // 返回的内容
@@ -23,34 +27,24 @@ pub struct ObjectMeta {
 ///
 /// 具体详情查阅 [阿里云官方文档](https://help.aliyun.com/document_detail/31985.html)
 pub struct GetObjectMeta {
-    object: OssObject,
-    querys: OssInners,
+    req: OssRequest,
 }
 impl GetObjectMeta {
-    pub(super) fn new(object: OssObject) -> Self {
-        let querys = OssInners::from("objectMeta", "");
-        GetObjectMeta { object, querys }
+    pub(super) fn new(oss: Oss) -> Self {
+        let mut req = OssRequest::new(oss, Method::HEAD);
+        req.insert_query("objectMeta", "");
+        GetObjectMeta { req }
     }
     /// 发送请求
     ///
     pub async fn send(self) -> Result<ObjectMeta, Error> {
         //构建http请求
-        let response = send_to_oss(
-            &self.object.client,
-            Some(&self.object.bucket),
-            Some(&self.object.object),
-            Method::HEAD,
-            Some(&self.querys),
-            None,
-            Body::empty(),
-        )?
-        .await?;
+        let response = self.req.send_to_oss()?.await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {
             code if code.is_success() => {
                 let headers = response.headers();
-                println!("{:#?}", headers);
                 let content_length = headers
                     .get("Content-Length")
                     .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
@@ -77,7 +71,17 @@ impl GetObjectMeta {
                         .ok()
                         .map(|v| Bytes::from(v))
                 });
-                Err(Error::OssError(status_code, x_oss_error))
+                match x_oss_error {
+                    None => Err(Error::OssInvalidError(status_code, Bytes::new())),
+                    Some(response_bytes) => {
+                        let oss_error =
+                            serde_xml_rs::from_reader::<&[u8], OssError>(&*response_bytes);
+                        match oss_error {
+                            Ok(oss_error) => Err(Error::OssError(status_code, oss_error)),
+                            Err(_) => Err(Error::OssInvalidError(status_code, response_bytes)),
+                        }
+                    }
+                }
             }
         }
     }

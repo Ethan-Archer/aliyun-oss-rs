@@ -1,10 +1,10 @@
 use crate::{
-    common::{OssInners, Owner, StorageClass},
+    common::{Owner, StorageClass},
     error::normal_error,
-    send::send_to_oss,
-    Error, OssBucket,
+    request::{Oss, OssRequest},
+    Error,
 };
-use hyper::{body::to_bytes, Body, Method};
+use hyper::{body::to_bytes, Method};
 use serde_derive::Deserialize;
 use std::cmp;
 
@@ -55,19 +55,19 @@ pub struct CommonPrefixes {
 ///
 /// 具体详情查阅 [阿里云官方文档](https://help.aliyun.com/document_detail/187544.html)
 pub struct ListObjects {
-    bucket: OssBucket,
-    querys: OssInners,
+    req: OssRequest,
 }
 
 impl ListObjects {
-    pub(super) fn new(bucket: OssBucket) -> Self {
-        let mut querys = OssInners::from("list-type", "2");
-        querys.insert("max-keys", "1000");
-        ListObjects { bucket, querys }
+    pub(super) fn new(oss: Oss) -> Self {
+        let mut req = OssRequest::new(oss, Method::GET);
+        req.insert_query("list-type", "2");
+        req.insert_query("max-keys", "1000");
+        ListObjects { req }
     }
     /// 对Object名字进行分组的字符。所有Object名字包含指定的前缀，第一次出现delimiter字符之间的Object作为一组元素（即CommonPrefixes）
     pub fn set_delimiter(mut self, delimiter: impl ToString) -> Self {
-        self.querys.insert("delimiter", delimiter);
+        self.req.insert_query("delimiter", delimiter);
         self
     }
     /// 设定从start-after之后按字母排序开始返回Object。
@@ -76,19 +76,20 @@ impl ListObjects {
     ///
     /// 做条件查询时，即使start-after在列表中不存在，也会从符合start-after字母排序的下一个开始。
     pub fn set_start_after(mut self, start_after: impl ToString) -> Self {
-        self.querys.insert("start-after", start_after);
+        self.req.insert_query("start-after", start_after);
         self
     }
     /// 指定List操作需要从此token开始。
     ///
     /// 可从ListObjects结果中的NextContinuationToken获取此token。
     pub fn set_continuation_token(mut self, continuation_token: impl ToString) -> Self {
-        self.querys.insert("continuation-token", continuation_token);
+        self.req
+            .insert_query("continuation-token", continuation_token);
         self
     }
     /// 限定返回文件的Key必须以prefix作为前缀。
     pub fn set_prefix(mut self, prefix: impl ToString) -> Self {
-        self.querys.insert("prefix", prefix.to_string());
+        self.req.insert_query("prefix", prefix.to_string());
         self
     }
     /// 指定返回文件的最大数量。
@@ -98,28 +99,19 @@ impl ListObjects {
     /// 默认值：1000，取值范围：1 - 1000，设置的值如不在这个范围，则会使用默认值
     pub fn set_max_keys(mut self, max_keys: u32) -> Self {
         let max_keys = cmp::min(1000, cmp::max(1, max_keys));
-        self.querys.insert("max-keys", max_keys);
+        self.req.insert_query("max-keys", max_keys);
         self
     }
     /// 指定是否在返回结果中包含owner信息。
     pub fn fetch_owner(mut self) -> Self {
-        self.querys.insert("fetch-owner", "true");
+        self.req.insert_query("fetch-owner", "true");
         self
     }
     /// 发送请求
     ///
     pub async fn send(self) -> Result<ObjectsList, Error> {
         //构建http请求
-        let response = send_to_oss(
-            &self.bucket.client,
-            Some(&self.bucket.bucket),
-            None,
-            Method::GET,
-            Some(&self.querys),
-            None,
-            Body::empty(),
-        )?
-        .await?;
+        let response = self.req.send_to_oss()?.await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {

@@ -1,10 +1,10 @@
 use crate::{
-    common::{OssInners, StorageClass},
+    common::StorageClass,
     error::normal_error,
-    send::send_to_oss,
-    Error, OssClient,
+    request::{Oss, OssRequest},
+    Error,
 };
-use hyper::{body::to_bytes, Body, Method};
+use hyper::{body::to_bytes, Method};
 use serde_derive::Deserialize;
 
 //返回值
@@ -62,17 +62,13 @@ pub struct ListAllMyBuckets {
 /// ```
 ///
 pub struct ListBuckets {
-    client: OssClient,
-    querys: OssInners,
-    headers: OssInners,
+    req: OssRequest,
 }
 
 impl ListBuckets {
-    pub(super) fn new(client: OssClient) -> Self {
+    pub(super) fn new(oss: Oss) -> Self {
         ListBuckets {
-            client,
-            querys: OssInners::new(),
-            headers: OssInners::new(),
+            req: OssRequest::new(oss, Method::GET),
         }
     }
 
@@ -83,37 +79,35 @@ impl ListBuckets {
     /// - 只能含有小写英文字母和数字，以及 - 连字符，且不能以连字符开头
     ///
     pub fn set_prefix(mut self, prefix: impl ToString) -> Self {
-        self.querys.insert("prefix", prefix);
+        self.req.insert_query("prefix", prefix);
         self
     }
     /// 设定结果从marker之后按字母排序的第一个开始返回。如果不设定，则从头开始返回数据。
     pub fn set_marker(mut self, marker: impl ToString) -> Self {
-        self.querys.insert("marker", marker);
+        self.req.insert_query("marker", marker);
         self
     }
     /// 限定此次返回Bucket的最大个数。取值范围：1~1000，默认值：100
     pub fn set_max_keys(mut self, max_keys: u32) -> Self {
-        self.querys.insert("max-keys", max_keys);
+        self.req.insert_query("max-keys", max_keys);
         self
     }
     /// 指定资源组ID
     pub fn set_group_id(mut self, group_id: impl ToString) -> Self {
-        self.headers.insert("x-oss-resource-group-id", group_id);
+        self.req.insert_header("x-oss-resource-group-id", group_id);
+        self
+    }
+    /// 指定从哪个EndPoint发起查询，并不是指查询该地域下的存储空间列表
+    ///
+    /// 默认为 oss.aliyuncs.com ，如你的网络无法访问，可以设置一个你可以访问的EndPoint
+    pub fn set_endpoint(mut self, endpoint: impl ToString) -> Self {
+        self.req.set_endpoint(endpoint);
         self
     }
     /// 发送请求
-    pub async fn send(&self) -> Result<ListAllMyBuckets, Error> {
+    pub async fn send(self) -> Result<ListAllMyBuckets, Error> {
         //构建http请求
-        let response = send_to_oss(
-            &self.client,
-            None,
-            None,
-            Method::GET,
-            Some(&self.querys),
-            Some(&self.headers),
-            Body::empty(),
-        )?
-        .await?;
+        let response = self.req.send_to_oss()?.await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {

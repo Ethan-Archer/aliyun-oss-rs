@@ -1,8 +1,12 @@
-use crate::{common::OssInners, error::normal_error, send::send_to_oss, Error, OssObject};
+use crate::{
+    error::normal_error,
+    request::{Oss, OssRequest},
+    Error,
+};
 use bytes::Bytes;
 use chrono::NaiveDateTime;
 use futures_util::{Stream, StreamExt};
-use hyper::{body::to_bytes, Body, Method};
+use hyper::{body::to_bytes, Method};
 use std::pin::Pin;
 use tokio::{
     fs::{create_dir_all, OpenOptions},
@@ -13,16 +17,12 @@ use tokio::{
 ///
 /// 具体详情查阅 [阿里云官方文档](https://help.aliyun.com/document_detail/31980.html)
 pub struct GetObject {
-    object: OssObject,
-    headers: OssInners,
-    querys: OssInners,
+    req: OssRequest,
 }
 impl GetObject {
-    pub fn new(object: OssObject) -> Self {
+    pub(super) fn new(oss: Oss) -> Self {
         GetObject {
-            object,
-            headers: OssInners::new(),
-            querys: OssInners::new(),
+            req: OssRequest::new(oss, Method::GET),
         }
     }
     /// 设置响应时的range
@@ -30,15 +30,21 @@ impl GetObject {
     /// end应该大于等于start，并且两者都在合法索引范围内，如果设置的值不合法，则将下载文件的所有内容
     ///
     /// 文件字节索引是从0开始，例如文件大小是500字节，则索引范围为 0 - 499
-    pub fn set_range(mut self, start: usize, end: usize) -> Self {
-        self.headers
-            .insert("Range", format!("bytes={}-{}", start, end));
+    pub fn set_range(mut self, start: usize, end: Option<usize>) -> Self {
+        self.req.insert_header(
+            "Range",
+            format!(
+                "bytes={}-{}",
+                start,
+                end.map(|v| v.to_string()).unwrap_or_else(|| String::new())
+            ),
+        );
         self
     }
     /// 如果指定的时间早于实际修改时间或指定的时间不符合规范，则直接返回Object，并返回200 OK；如果指定的时间等于或者晚于实际修改时间，则返回304 Not Modified。
     ///
     pub fn set_if_modified_since(mut self, if_modified_since: NaiveDateTime) -> Self {
-        self.querys.insert(
+        self.req.insert_query(
             "If-Modified-Since",
             if_modified_since.format("%a, %e %b %Y %H:%M:%S GMT"),
         );
@@ -47,7 +53,7 @@ impl GetObject {
     /// 如果指定的时间等于或者晚于Object实际修改时间，则正常传输Object，并返回200 OK；如果指定的时间早于实际修改时间，则返回412 Precondition Failed。
     ///
     pub fn set_if_unmodified_since(mut self, if_unmodified_since: NaiveDateTime) -> Self {
-        self.querys.insert(
+        self.req.insert_query(
             "If-Unmodified-Since",
             if_unmodified_since.format("%a, %e %b %Y %H:%M:%S GMT"),
         );
@@ -57,14 +63,14 @@ impl GetObject {
     ///
     /// Object的ETag值用于验证数据是否发生了更改，您可以基于ETag值验证数据完整性。
     pub fn set_if_match(mut self, if_match: impl ToString) -> Self {
-        self.querys.insert("If-Match", if_match);
+        self.req.insert_query("If-Match", if_match);
         self
     }
     /// 如果传入的ETag值和Object的ETag不匹配，则正常传输Object，并返回200 OK；如果传入的ETag和Object的ETag匹配，则返回304 Not Modified。
     ///
     /// Object的ETag值用于验证数据是否发生了更改，您可以基于ETag值验证数据完整性。
     pub fn set_if_none_match(mut self, if_none_match: impl ToString) -> Self {
-        self.querys.insert("If-None-Match", if_none_match);
+        self.req.insert_query("If-None-Match", if_none_match);
         self
     }
     /// 下载文件保存到磁盘
@@ -76,16 +82,7 @@ impl GetObject {
             return Err(Error::PathNotSupported);
         }
         //发起请求
-        let response = send_to_oss(
-            &self.object.client,
-            Some(&self.object.bucket),
-            Some(&self.object.object),
-            Method::GET,
-            Some(&self.querys),
-            None,
-            Body::empty(),
-        )?
-        .await?;
+        let response = self.req.send_to_oss()?.await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {
@@ -123,16 +120,7 @@ impl GetObject {
     /// 如果文件较大，此方法可能占用过多内存，谨慎使用
     pub async fn download_to_buf(self) -> Result<Bytes, Error> {
         //发起请求
-        let response = send_to_oss(
-            &self.object.client,
-            Some(&self.object.bucket),
-            Some(&self.object.object),
-            Method::GET,
-            Some(&self.querys),
-            None,
-            Body::empty(),
-        )?
-        .await?;
+        let response = self.req.send_to_oss()?.await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {
@@ -161,16 +149,7 @@ impl GetObject {
         self,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<bytes::Bytes, Error>> + Send>>, Error> {
         //发起请求
-        let response = send_to_oss(
-            &self.object.client,
-            Some(&self.object.bucket),
-            Some(&self.object.object),
-            Method::GET,
-            Some(&self.querys),
-            None,
-            Body::empty(),
-        )?
-        .await?;
+        let response = self.req.send_to_oss()?.await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {

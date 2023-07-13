@@ -1,10 +1,10 @@
 use crate::{
-    common::{Acl, DataRedundancyType, OssInners, Owner, StorageClass},
+    common::{Acl, DataRedundancyType, Owner, StorageClass},
     error::normal_error,
-    send::send_to_oss,
-    Error, OssBucket,
+    request::{Oss, OssRequest},
+    Error,
 };
-use hyper::{body::to_bytes, Body, Method};
+use hyper::{body::to_bytes, Method};
 use serde_derive::Deserialize;
 
 // 返回内容
@@ -82,27 +82,18 @@ pub struct BucketPolicy {
 ///
 /// 具体详情查阅 [阿里云官方文档](https://help.aliyun.com/document_detail/31968.html)
 pub struct GetBucketInfo {
-    bucket: OssBucket,
-    querys: OssInners,
+    req: OssRequest,
 }
 impl GetBucketInfo {
-    pub(super) fn new(bucket: OssBucket) -> Self {
-        let querys = OssInners::from("bucketInfo", "");
-        GetBucketInfo { bucket, querys }
+    pub(super) fn new(oss: Oss) -> Self {
+        let mut req = OssRequest::new(oss, Method::GET);
+        req.insert_query("bucketInfo", "");
+        GetBucketInfo { req }
     }
     /// 发送请求
     pub async fn send(self) -> Result<BucketInfo, Error> {
         //构建http请求
-        let response = send_to_oss(
-            &self.bucket.client,
-            Some(&self.bucket.bucket),
-            None,
-            Method::GET,
-            Some(&self.querys),
-            None,
-            Body::empty(),
-        )?
-        .await?;
+        let response = self.req.send_to_oss()?.await?;
         //拆解响应消息
         let status_code = response.status();
         match status_code {
