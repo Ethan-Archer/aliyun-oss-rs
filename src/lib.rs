@@ -13,7 +13,6 @@
 //! let client = OssClient::new(
 //! "Your AccessKey ID",
 //! "Your AccessKey Secret",
-//! "oss-cn-zhangjiakou.aliyuncs.com",
 //! );
 //!
 //! ```
@@ -26,7 +25,7 @@
 //!
 //! ##### 查询存储空间中文件列表
 //! ```
-//! let bucket = client.bucket("for-rs-test");
+//! let bucket = client.bucket("for-rs-test","oss-cn-zhangjiakou.aliyuncs.com");
 //! let files = bucket.list_objects().send().await;
 //! ```
 //!
@@ -41,7 +40,7 @@
 //! use chrono::{Duration, Local};
 //!
 //! let date = Local::now().naive_local() + Duration::days(3);
-//! let url = object.get_object_url(date).build();
+//! let url = object.get_object_url().url(date);
 //!
 //! ```
 //!
