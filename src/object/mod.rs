@@ -7,6 +7,7 @@ pub use self::get_object::GetObject;
 pub use self::get_object_meta::GetObjectMeta;
 pub use self::get_object_tagging::GetObjectTagging;
 pub use self::get_object_url::GetObjectUrl;
+pub use self::head_object::HeadObject;
 #[doc(hidden)]
 pub use self::oss_object::OssObject;
 pub use self::put_object::PutObject;
@@ -18,5 +19,6 @@ mod get_object;
 mod get_object_meta;
 mod get_object_tagging;
 mod get_object_url;
+mod head_object;
 mod oss_object;
 mod put_object;

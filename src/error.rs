@@ -34,10 +34,6 @@ pub struct OssError {
     pub message: String,
     #[serde(rename = "RequestId")]
     pub request_id: String,
-    #[serde(rename = "HostId")]
-    pub host_id: String,
-    #[serde(rename = "Key")]
-    pub key: String,
     #[serde(rename = "EC")]
     pub ec: String,
 }

@@ -4,7 +4,10 @@ use chrono::{NaiveDateTime, Utc};
 use hyper::{client::ResponseFuture, header, Body, Client, Method, Request};
 use hyper_tls::HttpsConnector;
 use ring::hmac;
-use std::{borrow::Cow, collections::HashMap};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+};
 
 const EXCLUDED_VALUES: [&str; 84] = [
     "acl",
@@ -100,6 +103,7 @@ pub(crate) struct Oss {
     pub ak_secret: Cow<'static, str>,
     pub security_token: Option<Cow<'static, str>>,
     pub endpoint: Cow<'static, str>,
+    pub custom_domain: Option<Cow<'static, str>>,
     pub bucket: Option<Cow<'static, str>>,
     pub object: Option<Cow<'static, str>>,
     pub enable_https: bool,
@@ -111,6 +115,7 @@ impl Oss {
             ak_secret: ak_secret.to_owned().into(),
             security_token: None,
             endpoint: "oss.aliyuncs.com".to_owned().into(),
+            custom_domain: None,
             bucket: None,
             object: None,
             enable_https: true,
@@ -122,8 +127,11 @@ impl Oss {
     pub fn set_endpoint(&mut self, endpoint: impl ToString) {
         self.endpoint = endpoint.to_string().into();
     }
+    pub fn set_custom_domain(&mut self, custom_domain: impl ToString) {
+        self.custom_domain = Some(custom_domain.to_string().into());
+    }
     pub fn set_object(&mut self, object: impl ToString) {
-        self.object = Some(object.to_string().into());
+        self.object = Some(object.to_string().trim_start_matches("/").to_owned().into());
     }
     pub fn set_https(&mut self, https: bool) {
         self.enable_https = https;
@@ -164,16 +172,27 @@ impl OssRequest {
         self.body = body;
     }
     pub fn uri(&self) -> String {
-        //生成url
-        let host = format!(
-            "{}{}",
-            self.oss
-                .bucket
-                .clone()
-                .map(|v| format!("{}.", v))
-                .unwrap_or_else(|| String::new()),
-            self.oss.endpoint
-        );
+        //协议
+        let protocol = if self.oss.enable_https {
+            "https://"
+        } else {
+            "http://"
+        };
+        //Host
+        let host = if let Some(custom_domain) = self.oss.custom_domain.clone() {
+            custom_domain.to_string()
+        } else {
+            format!(
+                "{}{}",
+                self.oss
+                    .bucket
+                    .clone()
+                    .map(|v| format!("{}.", v))
+                    .unwrap_or_else(|| String::new()),
+                self.oss.endpoint
+            )
+        };
+        //查询参数
         let query = self
             .querys
             .iter()
@@ -192,8 +211,10 @@ impl OssRequest {
         } else {
             format!("?{}", query)
         };
+        //生成url
         format!(
-            "https://{}/{}{}",
+            "{}{}/{}{}",
+            protocol,
             host,
             url_encode(
                 &self
@@ -209,10 +230,10 @@ impl OssRequest {
         //提取header数据
         let mut content_type = String::new();
         let mut content_md5 = String::new();
-        let mut canonicalized_ossheaders = Vec::with_capacity(self.headers.len() + 1);
+        let mut canonicalized_ossheaders = BTreeMap::new();
         self.headers.iter().for_each(|(key, value)| {
             if key.starts_with("x-oss-") {
-                canonicalized_ossheaders.push(format!("{}:{}", key, value))
+                canonicalized_ossheaders.insert(key, value);
             };
             if key.starts_with(&header::CONTENT_TYPE.to_string()) {
                 content_type = value.to_string();
@@ -222,28 +243,36 @@ impl OssRequest {
             };
         });
         //处理canonicalized_ossheaders
-        canonicalized_ossheaders.sort();
-        let mut canonicalized_ossheaders = canonicalized_ossheaders.join("\n");
+        let mut canonicalized_ossheaders = canonicalized_ossheaders
+            .into_iter()
+            .map(|(key, value)| format!("{}:{}", key, value))
+            .collect::<Vec<String>>()
+            .join("\n");
         if !canonicalized_ossheaders.is_empty() {
             canonicalized_ossheaders.push_str("\n")
         }
         //构建sub_resource
-        let mut sub_resource = self
+        let sub_resource = self
             .querys
             .iter()
-            .filter(|(key, _)| {
-                EXCLUDED_VALUES.contains(&key.as_str()) && !(key.as_str() == "x-oss-ac-source-ip")
+            .filter_map(|(key, value)| {
+                if EXCLUDED_VALUES.contains(&key.as_str()) {
+                    Some((key.to_owned(), value.to_owned()))
+                } else {
+                    None
+                }
             })
+            .collect::<BTreeMap<String, String>>()
+            .into_iter()
             .map(|(key, value)| {
-                if value.to_string().is_empty() {
+                if value.is_empty() {
                     key.to_owned()
                 } else {
                     format!("{}={}", key, value)
                 }
             })
-            .collect::<Vec<_>>();
-        sub_resource.sort();
-        let sub_resource = sub_resource.into_iter().collect::<Vec<_>>().join("&");
+            .collect::<Vec<_>>()
+            .join("&");
         //构建canonicalized_resource
         let mut canonicalized_resource = format!(
             "/{}{}",
@@ -287,10 +316,10 @@ impl OssRequest {
         //提取header数据
         let mut content_type = String::new();
         let mut content_md5 = String::new();
-        let mut canonicalized_ossheaders = Vec::with_capacity(self.headers.len() + 1);
+        let mut canonicalized_ossheaders = BTreeMap::new();
         self.headers.iter().for_each(|(key, value)| {
             if key.starts_with("x-oss-") {
-                canonicalized_ossheaders.push(format!("{}:{}", key, value))
+                canonicalized_ossheaders.insert(key, value);
             };
             if key.starts_with(&header::CONTENT_TYPE.to_string()) {
                 content_type = value.to_string();
@@ -300,26 +329,36 @@ impl OssRequest {
             };
         });
         //处理canonicalized_ossheaders
-        canonicalized_ossheaders.sort();
-        let mut canonicalized_ossheaders = canonicalized_ossheaders.join("\n");
+        let mut canonicalized_ossheaders = canonicalized_ossheaders
+            .into_iter()
+            .map(|(key, value)| format!("{}:{}", key, value))
+            .collect::<Vec<String>>()
+            .join("\n");
         if !canonicalized_ossheaders.is_empty() {
             canonicalized_ossheaders.push_str("\n")
         }
         //构建sub_resource
-        let mut sub_resource = self
+        let sub_resource = self
             .querys
             .iter()
-            .filter(|(key, _)| EXCLUDED_VALUES.contains(&key.as_str()))
+            .filter_map(|(key, value)| {
+                if EXCLUDED_VALUES.contains(&key.as_str()) {
+                    Some((key.to_owned(), value.to_owned()))
+                } else {
+                    None
+                }
+            })
+            .collect::<BTreeMap<String, String>>()
+            .into_iter()
             .map(|(key, value)| {
-                if value.to_string().is_empty() {
+                if value.is_empty() {
                     key.to_owned()
                 } else {
                     format!("{}={}", key, value)
                 }
             })
-            .collect::<Vec<_>>();
-        sub_resource.sort();
-        let sub_resource = sub_resource.into_iter().collect::<Vec<_>>().join("&");
+            .collect::<Vec<_>>()
+            .join("&");
         //构建canonicalized_resource
         let mut canonicalized_resource = format!(
             "/{}{}",
@@ -372,7 +411,12 @@ impl OssRequest {
             req = req.header(key, value);
         }
         let request = req.body(self.body)?;
-        let client = Client::builder().build::<_, hyper::Body>(HttpsConnector::new());
-        Ok(client.request(request))
+        println!("{:#?}", request);
+        if self.oss.enable_https {
+            let client = Client::builder().build::<_, hyper::Body>(HttpsConnector::new());
+            Ok(client.request(request))
+        } else {
+            Ok(Client::new().request(request))
+        }
     }
 }

@@ -16,7 +16,7 @@ impl OssBucket {
     /// 设置自定义域名
     ///
     pub fn set_custom_domain(mut self, custom_domain: impl ToString, enable_https: bool) -> Self {
-        self.oss.set_endpoint(custom_domain);
+        self.oss.set_custom_domain(custom_domain);
         self.oss.set_https(enable_https);
         self
     }

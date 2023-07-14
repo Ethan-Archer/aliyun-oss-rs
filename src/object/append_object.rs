@@ -1,5 +1,7 @@
 use crate::{
-    common::{url_encode, Acl, CacheControl, ContentDisposition, StorageClass},
+    common::{
+        invalid_metadata_key, url_encode, Acl, CacheControl, ContentDisposition, StorageClass,
+    },
     error::{normal_error, Error},
     request::{Oss, OssRequest},
 };
@@ -68,15 +70,15 @@ impl AppendObject {
             .insert_header(header::CONTENT_DISPOSITION, content_disposition);
         self
     }
-    /// 不允许覆盖同名文件
-    pub fn forbid_overwrite(mut self) -> Self {
-        self.req.insert_header("x-oss-forbid-overwrite", "true");
-        self
-    }
     /// 设置需要附加的metadata
+    ///
+    /// key只允许存在英文字母、数字、连字符，如果存在其他字符，则metadata将直接被抛弃
     pub fn set_meta(mut self, key: impl ToString, value: impl ToString) -> Self {
-        self.req
-            .insert_header(format!("x-oss-meta-{}", key.to_string()), value);
+        let key = key.to_string();
+        if !invalid_metadata_key(&key) {
+            self.req
+                .insert_header(format!("x-oss-meta-{}", key.to_string()), value);
+        }
         self
     }
     /// 设置标签信息
@@ -142,7 +144,9 @@ impl AppendObject {
             })
             .collect::<Vec<_>>()
             .join("&");
-        self.req.insert_header("x-oss-tagging", tags);
+        if !tags.is_empty() {
+            self.req.insert_header("x-oss-tagging", tags);
+        }
         //打开文件
         let file = File::open(file.to_string()).await?;
         //读取文件大小
@@ -150,6 +154,7 @@ impl AppendObject {
         if file_size >= 5_000_000_000 {
             return Err(Error::FileTooBig);
         }
+        self.req.insert_header(header::CONTENT_LENGTH, file_size);
         //初始化文件内容读取数据流
         let buf = BufReader::with_capacity(131072, file);
         let stream = ReaderStream::with_capacity(buf, 16384);
@@ -187,10 +192,11 @@ impl AppendObject {
     ///
     pub async fn send_content(mut self, content: Vec<u8>) -> Result<Option<String>, Error> {
         //读取文件大小
-        let content_size = content.len() as u64;
+        let content_size = content.len();
         if content_size >= 5_000_000_000 {
             return Err(Error::FileTooBig);
         }
+        self.req.insert_header(header::CONTENT_LENGTH, content_size);
         //生成文件类型
         let content_type = match self.mime {
             Some(mime) => mime,
@@ -228,7 +234,11 @@ impl AppendObject {
             })
             .collect::<Vec<_>>()
             .join("&");
-        self.req.insert_header("x-oss-tagging", tags);
+        if !tags.is_empty() {
+            self.req.insert_header("x-oss-tagging", tags);
+        }
+        //插入body
+        self.req.set_body(content.into());
         //构建http请求
         let response = self.req.send_to_oss()?.await?;
         //拆解响应消息

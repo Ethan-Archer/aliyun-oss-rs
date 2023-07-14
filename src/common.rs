@@ -12,6 +12,16 @@ pub(crate) fn url_encode(input: &str) -> String {
     utf8_percent_encode(input, URL_ENCODE).to_string()
 }
 
+//检测metadata中key是否合规
+pub(crate) fn invalid_metadata_key(input: &str) -> bool {
+    for c in input.chars() {
+        if !c.is_ascii_alphanumeric() && c != '-' {
+            return true;
+        }
+    }
+    false
+}
+
 // -------------------------- 公共数据 --------------------------
 
 /// 访问权限ACL

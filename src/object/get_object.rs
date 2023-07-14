@@ -41,36 +41,35 @@ impl GetObject {
         );
         self
     }
-    /// 如果指定的时间早于实际修改时间或指定的时间不符合规范，则直接返回Object，并返回200 OK；如果指定的时间等于或者晚于实际修改时间，则返回304 Not Modified。
+    /// 如果指定的时间早于实际修改时间，则正常返回
     ///
     pub fn set_if_modified_since(mut self, if_modified_since: NaiveDateTime) -> Self {
-        self.req.insert_query(
+        self.req.insert_header(
             "If-Modified-Since",
             if_modified_since.format("%a, %e %b %Y %H:%M:%S GMT"),
         );
         self
     }
-    /// 如果指定的时间等于或者晚于Object实际修改时间，则正常传输Object，并返回200 OK；如果指定的时间早于实际修改时间，则返回412 Precondition Failed。
+    /// 如果指定的时间等于或者晚于实际修改时间，则正常返回
     ///
     pub fn set_if_unmodified_since(mut self, if_unmodified_since: NaiveDateTime) -> Self {
-        self.req.insert_query(
+        self.req.insert_header(
             "If-Unmodified-Since",
             if_unmodified_since.format("%a, %e %b %Y %H:%M:%S GMT"),
         );
         self
     }
-    /// 如果传入的ETag和Object的ETag匹配，则正常传输Object，并返回200 OK；如果传入的ETag和Object的ETag不匹配，则返回412 Precondition Failed。
+    /// 如果传入的ETag和文件的ETag匹配，则正常返回
     ///
-    /// Object的ETag值用于验证数据是否发生了更改，您可以基于ETag值验证数据完整性。
+    /// 文件的ETag值用于验证数据是否发生了更改，您可以基于ETag值验证数据完整性。
     pub fn set_if_match(mut self, if_match: impl ToString) -> Self {
-        self.req.insert_query("If-Match", if_match);
+        self.req.insert_header("If-Match", if_match);
         self
     }
-    /// 如果传入的ETag值和Object的ETag不匹配，则正常传输Object，并返回200 OK；如果传入的ETag和Object的ETag匹配，则返回304 Not Modified。
+    /// 如果传入的ETag值和文件的ETag不匹配，则正常返回
     ///
-    /// Object的ETag值用于验证数据是否发生了更改，您可以基于ETag值验证数据完整性。
     pub fn set_if_none_match(mut self, if_none_match: impl ToString) -> Self {
-        self.req.insert_query("If-None-Match", if_none_match);
+        self.req.insert_header("If-None-Match", if_none_match);
         self
     }
     /// 下载文件保存到磁盘
@@ -118,7 +117,7 @@ impl GetObject {
     /// 下载文件，直接将内容返回
     ///
     /// 如果文件较大，此方法可能占用过多内存，谨慎使用
-    pub async fn download_to_buf(self) -> Result<Bytes, Error> {
+    pub async fn download(self) -> Result<Bytes, Error> {
         //发起请求
         let response = self.req.send_to_oss()?.await?;
         //拆解响应消息

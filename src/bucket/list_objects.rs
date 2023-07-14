@@ -49,6 +49,7 @@ pub struct CommonPrefixes {
     /// 前缀
     pub prefix: String,
 }
+
 /// 列举存储空间中所有文件的信息
 ///
 /// 默认获取前1000条文件信息

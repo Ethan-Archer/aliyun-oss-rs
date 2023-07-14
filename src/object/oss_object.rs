@@ -1,6 +1,6 @@
 use super::{
     del_object::DelObject, AppendObject, CopyObject, GetObject, GetObjectMeta, GetObjectTagging,
-    GetObjectUrl, PutObject,
+    GetObjectUrl, HeadObject, PutObject,
 };
 use crate::request::Oss;
 
@@ -34,6 +34,10 @@ impl OssObject {
     /// 获取文件的标签信息
     pub fn get_object_tagging(&self) -> GetObjectTagging {
         GetObjectTagging::new(self.oss.clone())
+    }
+    /// 获取文件完整元信息
+    pub fn head_object(&self) -> HeadObject {
+        HeadObject::new(self.oss.clone())
     }
     /// 获取文件的meta信息
     pub fn get_object_meta(&self) -> GetObjectMeta {

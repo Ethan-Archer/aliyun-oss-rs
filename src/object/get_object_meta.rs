@@ -14,13 +14,13 @@ use serde_derive::Deserialize;
 #[serde(rename_all = "PascalCase")]
 pub struct ObjectMeta {
     /// 文件大小，单位字节
-    pub content_length: Option<String>,
+    pub content_length: String,
     /// 用于标识一个文件的内容
-    pub e_tag: Option<String>,
+    pub e_tag: String,
     /// 文件最后访问时间
     pub last_access_time: Option<String>,
     /// 文件最后修改时间
-    pub last_modified: Option<String>,
+    pub last_modified: String,
 }
 
 /// 获取文件的Meta信息
@@ -47,16 +47,19 @@ impl GetObjectMeta {
                 let headers = response.headers();
                 let content_length = headers
                     .get("Content-Length")
-                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
-                let e_tag = headers.get("ETag").and_then(|header| {
-                    header.to_str().ok().map(|s| s.trim_matches('"').to_owned())
-                });
+                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()))
+                    .unwrap_or_else(|| String::new());
+                let e_tag = headers
+                    .get("ETag")
+                    .and_then(|header| header.to_str().ok().map(|s| s.trim_matches('"').to_owned()))
+                    .unwrap_or_else(|| String::new());
                 let last_access_time = headers
                     .get("x-oss-last-access-time")
                     .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
                 let last_modified = headers
                     .get("Last-Modified")
-                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()));
+                    .and_then(|header| header.to_str().ok().map(|s| s.to_owned()))
+                    .unwrap_or_else(|| String::new());
                 Ok(ObjectMeta {
                     content_length,
                     e_tag,

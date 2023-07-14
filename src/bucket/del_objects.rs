@@ -4,26 +4,9 @@ use crate::{
     Error,
 };
 use base64::{engine::general_purpose, Engine};
-use hyper::{body::to_bytes, Method};
+use hyper::Method;
 use md5::{Digest, Md5};
-use serde_derive::Deserialize;
 use std::collections::HashSet;
-
-#[derive(Debug, Deserialize)]
-#[serde(rename = "DeleteResult")]
-pub(crate) struct DeleteObjectsResult {
-    #[serde(rename = "Deleted")]
-    pub deleted: Vec<DeletedObject>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename = "Deleted")]
-pub struct DeletedObject {
-    #[serde(rename = "Key")]
-    pub key: String,
-    #[serde(rename = "DeleteMarker")]
-    pub delete_marker: Option<String>,
-}
 
 /// 批量删除文件
 ///
@@ -36,7 +19,7 @@ pub struct DelObjects {
 }
 impl DelObjects {
     pub(super) fn new(oss: Oss, files: Vec<impl ToString>) -> Self {
-        let mut req = OssRequest::new(oss, Method::GET);
+        let mut req = OssRequest::new(oss, Method::POST);
         req.insert_query("delete", "");
         let len = files.len();
         if len == 0 {
@@ -68,10 +51,10 @@ impl DelObjects {
     }
     /// 发送请求
     ///
-    pub async fn send(mut self) -> Result<Vec<DeletedObject>, Error> {
+    pub async fn send(mut self) -> Result<(), Error> {
         //生成body
         let body = format!(
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Delete><Quiet>false</Quiet>{}</Delete>",
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Delete><Quiet>true</Quiet>{}</Delete>",
             self.objects
                 .iter()
                 .map(|v| format!("<Object><Key>{}</Key></Object>", v))
@@ -95,14 +78,7 @@ impl DelObjects {
         //拆解响应消息
         let status_code = response.status();
         match status_code {
-            code if code.is_success() => {
-                let response_bytes = to_bytes(response.into_body())
-                    .await
-                    .map_err(|_| Error::OssInvalidResponse(None))?;
-                let result: DeleteObjectsResult = serde_xml_rs::from_reader(&*response_bytes)
-                    .map_err(|_| Error::OssInvalidResponse(Some(response_bytes)))?;
-                Ok(result.deleted)
-            }
+            code if code.is_success() => Ok(()),
             _ => Err(normal_error(response).await),
         }
     }

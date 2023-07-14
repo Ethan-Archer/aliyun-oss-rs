@@ -1,5 +1,7 @@
 use crate::{
-    common::{url_encode, Acl, CacheControl, ContentDisposition, StorageClass},
+    common::{
+        invalid_metadata_key, url_encode, Acl, CacheControl, ContentDisposition, StorageClass,
+    },
     error::{normal_error, Error},
     request::{Oss, OssRequest},
 };
@@ -67,9 +69,14 @@ impl PutObject {
         self
     }
     /// 设置需要附加的metadata
+    ///
+    /// key只允许存在英文字母、数字、连字符，如果存在其他字符，则metadata将直接被抛弃
     pub fn set_meta(mut self, key: impl ToString, value: impl ToString) -> Self {
-        self.req
-            .insert_header(format!("x-oss-meta-{}", key.to_string()), value);
+        let key = key.to_string();
+        if !invalid_metadata_key(&key) {
+            self.req
+                .insert_header(format!("x-oss-meta-{}", key.to_string()), value);
+        }
         self
     }
     /// 设置标签信息
@@ -133,7 +140,9 @@ impl PutObject {
             })
             .collect::<Vec<_>>()
             .join("&");
-        self.req.insert_header("x-oss-tagging", tags);
+        if !tags.is_empty() {
+            self.req.insert_header("x-oss-tagging", tags);
+        }
         //打开文件
         let file = File::open(file.to_string()).await?;
         //读取文件大小
@@ -208,12 +217,17 @@ impl PutObject {
             })
             .collect::<Vec<_>>()
             .join("&");
-        self.req.insert_header("x-oss-tagging", tags);
+        if !tags.is_empty() {
+            self.req.insert_header("x-oss-tagging", tags);
+        }
         //读取大小
         let content_size = content.len() as u64;
         if content_size >= 5_000_000_000 {
             return Err(Error::FileTooBig);
         }
+        self.req.insert_header(header::CONTENT_LENGTH, content_size);
+        //插入body
+        self.req.set_body(content.into());
         //上传文件
         let response = self.req.send_to_oss()?.await?;
         //拆解响应消息

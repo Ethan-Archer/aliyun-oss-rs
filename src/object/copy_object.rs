@@ -1,5 +1,5 @@
 use crate::{
-    common::{url_encode, Acl, StorageClass},
+    common::{invalid_metadata_key, url_encode, Acl, StorageClass},
     error::{normal_error, Error},
     request::{Oss, OssRequest},
 };
@@ -43,23 +43,32 @@ impl CopyObject {
         self
     }
     /// 设置需要附加的metadata
+    ///
+    /// key只允许存在英文字母、数字、连字符，如果存在其他字符，则metadata将直接被抛弃
     pub fn set_meta(mut self, key: impl ToString, value: impl ToString) -> Self {
-        self.req
-            .insert_header(format!("x-oss-meta-{}", key.to_string()), value);
+        let key = key.to_string();
+        if !invalid_metadata_key(&key) {
+            self.req
+                .insert_header(format!("x-oss-meta-{}", key.to_string()), value);
+        }
         self
     }
     /// 如果指定的时间早于文件实际修改时间，则正常拷贝文件。
     ///
     pub fn set_if_modified_since(mut self, if_modified_since: NaiveDateTime) -> Self {
-        self.req
-            .insert_header("x-oss-copy-source-if-modified-since", if_modified_since);
+        self.req.insert_header(
+            "x-oss-copy-source-if-modified-since",
+            if_modified_since.format("%a, %e %b %Y %H:%M:%S GMT"),
+        );
         self
     }
     /// 如果指定的时间等于或者晚于文件实际修改时间，则正常拷贝文件。
     ///
     pub fn set_if_unmodified_since(mut self, if_unmodified_since: NaiveDateTime) -> Self {
-        self.req
-            .insert_header("x-oss-copy-source-if-unmodified-since", if_unmodified_since);
+        self.req.insert_header(
+            "x-oss-copy-source-if-unmodified-since",
+            if_unmodified_since.format("%a, %e %b %Y %H:%M:%S GMT"),
+        );
         self
     }
     /// 如果源文件的ETag值和您提供的ETag相等，则执行拷贝操作。
@@ -120,7 +129,9 @@ impl CopyObject {
             })
             .collect::<Vec<_>>()
             .join("&");
-        self.req.insert_header("x-oss-tagging", tags);
+        if !tags.is_empty() {
+            self.req.insert_header("x-oss-tagging", tags);
+        }
         //构建http请求
         let response = self.req.send_to_oss()?.await?;
         //拆解响应消息

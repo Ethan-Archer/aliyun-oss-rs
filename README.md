@@ -14,7 +14,6 @@
 let client = OssClient::new(
 "Your AccessKey ID",
 "Your AccessKey Secret",
-"oss-cn-zhangjiakou.aliyuncs.com",
 );
 ```
 
@@ -27,7 +26,8 @@ let buckets = client.list_buckets().set_prefix("rust").send().await;
 ##### 查询存储空间中文件列表
 
 ```
-let bucket = client.bucket("for-rs-test").list_objects()
+let bucket = client.bucket("for-rs-test","oss-cn-zhangjiakou.aliyuncs.com")
+             .list_objects()
              .set_max_objects(200)
              .set_prefix("rust")
              .send()
