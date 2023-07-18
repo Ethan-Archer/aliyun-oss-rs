@@ -1,6 +1,6 @@
 use super::{
     del_object::DelObject, AppendObject, CopyObject, GetObject, GetObjectMeta, GetObjectTagging,
-    GetObjectUrl, HeadObject, PutObject,
+    GetObjectUrl, HeadObject, PutObject, RestoreObject,
 };
 use crate::request::Oss;
 
@@ -50,5 +50,9 @@ impl OssObject {
     /// 复制文件
     pub fn copy_object(&self, copy_source: &str) -> CopyObject {
         CopyObject::new(self.oss.clone(), copy_source)
+    }
+    /// 解冻文件
+    pub fn restore_object(&self) -> RestoreObject {
+        RestoreObject::new(self.oss.clone())
     }
 }

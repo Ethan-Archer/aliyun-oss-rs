@@ -2,19 +2,12 @@
 [![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://docs.rs/aliyun-oss-rs)
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/EthanWinton/aliyun-oss-rs/blob/main/LICENSE-MIT)
 
-阿里云对象存储服务（Object Storage Service，简称 OSS），是阿里云对外提供的海量、安全、低成本、高可靠的云存储服务。
-
-没有复杂的结构，仅仅为快速调用而实现，设计遵循极简、实用原则，通过 OssClient - OssBucket - OssObject 三层结构，实现了部份常用 API，目前不支持的 API 在后续会逐步增加。
-
-目前仅实现了少量常用 API，后续将逐步增加其他 API 支持。
+阿里云对象存储服务（Object Storage Service，简称 OSS）的非官方 SDK 实现，无复杂结构设计，链式风格
 
 ##### 初始化
 
 ```
-let client = OssClient::new(
-"Your AccessKey ID",
-"Your AccessKey Secret",
-);
+let client = OssClient::new("Your AccessKey ID","Your AccessKey Secret");
 ```
 
 ##### 查询存储空间列表
@@ -47,6 +40,38 @@ let result = object.put_object().send_file("Your File Path").await;
 use chrono::{Duration, Local};
 
 let date = Local::now().naive_local() + Duration::days(3);
-let url = object.get_url(date).build().await;
+let url = object.get_url().url(date);
 
 ```
+
+### 已实现接口
+
+<details open>
+<summary>基础操作</summary>
+
+- <input type="checkbox" checked disabled> 列举存储空间列表 (ListBuckets)
+- <input type="checkbox" checked disabled> 列举 OSS 开服地域信息 (DescribeRegions)
+
+<summary>存储空间管理</summary>
+
+- <input type="checkbox" checked disabled> 新建存储空间 (PutBucket)
+- <input type="checkbox" checked disabled> 删除存储空间 (DeleteBucket)
+- <input type="checkbox" checked disabled> 列举存储空间内文件列表 (ListObjectsV2)
+- <input type="checkbox" checked disabled> 获取存储空间基本信息 (GetBucketInfo)
+- <input type="checkbox" checked disabled> 获取存储空间统计信息 (GetBucketStat)
+- <input type="checkbox" checked disabled> 批量删除文件 (DeleteMultipleObjects)
+
+<summary>文件管理</summary>
+
+- <input type="checkbox" checked disabled> 上传文件 (PutObject)
+- <input type="checkbox" checked disabled> 下载文件 (GetObject)
+- <input type="checkbox" checked disabled> 复制文件 (CopyObject)
+- <input type="checkbox" checked disabled> 追加文件 (AppendObject)
+- <input type="checkbox" checked disabled> 删除文件 (DeleteObject)
+- <input type="checkbox" checked disabled> 解冻文件 (RestoreObject)
+- <input type="checkbox" checked disabled> 获取文件元信息 (HeadObject)
+- <input type="checkbox" checked disabled> 获取文件元信息 (GetObjectMeta)
+- <input type="checkbox" checked disabled> 获取文件访问地址 (GetObjectUrl)
+- <input type="checkbox" checked disabled> 获取文件标签信息 (GetObjectTagging)
+
+</details>

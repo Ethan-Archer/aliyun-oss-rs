@@ -11,6 +11,7 @@ pub use self::head_object::HeadObject;
 #[doc(hidden)]
 pub use self::oss_object::OssObject;
 pub use self::put_object::PutObject;
+pub use self::restore_object::RestoreObject;
 
 mod append_object;
 mod copy_object;
@@ -22,3 +23,4 @@ mod get_object_url;
 mod head_object;
 mod oss_object;
 mod put_object;
+mod restore_object;

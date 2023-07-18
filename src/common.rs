@@ -91,6 +91,26 @@ impl fmt::Display for DataRedundancyType {
     }
 }
 
+///解冻优先级
+#[derive(Debug, Clone, Serialize, Deserialize, Copy)]
+pub enum RestoreTier {
+    /// 高优先级
+    Expedited,
+    /// 标准
+    Standard,
+    /// 批量
+    Bulk,
+}
+impl fmt::Display for RestoreTier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RestoreTier::Standard => f.write_str("Standard"),
+            RestoreTier::Expedited => f.write_str("Expedited"),
+            RestoreTier::Bulk => f.write_str("Bulk"),
+        }
+    }
+}
+
 /// http头，cache_control
 #[derive(Debug, Clone)]
 pub enum CacheControl {

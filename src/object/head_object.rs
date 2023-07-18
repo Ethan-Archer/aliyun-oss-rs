@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     error::OssError,
     request::{Oss, OssRequest},
@@ -9,6 +7,7 @@ use base64::{engine::general_purpose, Engine};
 use bytes::Bytes;
 use chrono::NaiveDateTime;
 use hyper::Method;
+use std::collections::HashMap;
 
 /// 获取文件的元信息
 ///
