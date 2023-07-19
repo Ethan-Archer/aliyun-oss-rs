@@ -1,6 +1,6 @@
 [package]
 name = "aliyun-oss-rs"
-version = "0.0.4"
+version = "0.0.5"
 edition = "2021"
 authors = ["Ethan Archer"]
 license = "MIT"
@@ -11,22 +11,18 @@ description = "A non-official Rust SDK implementation for Alibaba Cloud OSS."
 [dependencies]
 base64 = "0.21.2"
 bytes = "1.4.0"
-chrono = "0.4.25"
+chrono = "0.4.26"
 futures-util = { version = "0.3.28", default-features = false }
 hyper = { version = "0.14.27", features = ["stream", "http1", "tcp", "client"] }
 hyper-tls = "0.5.0"
-infer = "0.13.0"
+infer = "0.15.0"
 mime_guess = "2.0.4"
-percent-encoding = "2.2.0"
+percent-encoding = "2.3.0"
 ring = "0.16.20"
-serde = "1.0.163"
+serde = "1.0.171"
 serde-xml-rs = "0.6.0"
-serde_derive = "1.0.163"
-thiserror = "1.0.40"
+serde_derive = "1.0.171"
+thiserror = "1.0.43"
 tokio =  {version = "1",features = ["fs","io-util"]}
 tokio-util = {version = "0.7.8",features = ["io"]}
-md-5 = "0"
-
-[features]
-default = []
-with_version = []
+md-5 = "0.10.5"

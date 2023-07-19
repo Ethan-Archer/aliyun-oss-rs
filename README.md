@@ -86,3 +86,6 @@ let url = object.get_url().url(date);
     - [x] 获取文件标签 (GetObjectTagging)
     - [x] 设置文件标签 (PutObjectTagging)
     - [x] 清空文件标签 (DeleteObjectTagging)
+  - 软链接 (Symlink)
+    - [x] 新增软链接 (PutSymlink)
+    - [x] 获取软链接 (GetSymlink)

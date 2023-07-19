@@ -1,8 +1,8 @@
 use super::{
     del_object::DelObject, AbortUpload, AppendObject, CompleteUpload, CopyObject, CopyToPart,
     DelObjectTagging, GetObject, GetObjectAcl, GetObjectMeta, GetObjectTagging, GetObjectUrl,
-    HeadObject, InitUpload, ListParts, PutObject, PutObjectAcl, PutObjectTagging, RestoreObject,
-    UploadPart,
+    GetSymlink, HeadObject, InitUpload, ListParts, PutObject, PutObjectAcl, PutObjectTagging,
+    PutSymlink, RestoreObject, UploadPart,
 };
 use crate::{common::Acl, request::Oss};
 
@@ -71,6 +71,14 @@ impl OssObject {
         tags: Vec<(impl ToString, impl ToString)>,
     ) -> PutObjectTagging {
         PutObjectTagging::new(self.oss.clone(), tags)
+    }
+    /// 新增软链接
+    pub fn put_symlink(&self, symlink_target: impl ToString) -> PutSymlink {
+        PutSymlink::new(self.oss.clone(), symlink_target)
+    }
+    /// 获取软链接
+    pub fn get_symlink(&self) -> GetSymlink {
+        GetSymlink::new(self.oss.clone())
     }
     /// 清空文件标签
     pub fn del_object_tagging(&self) -> DelObjectTagging {
