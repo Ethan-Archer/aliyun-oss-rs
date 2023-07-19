@@ -27,6 +27,9 @@ pub(crate) fn invalid_metadata_key(input: &str) -> bool {
 /// 访问权限ACL
 #[derive(Debug, Deserialize, Clone)]
 pub enum Acl {
+    /// 仅用于文件ACL，代表文件ACL继承存储空间ACL
+    #[serde(rename = "default")]
+    Default,
     /// 私有，读写请求全部需要经过授权
     #[serde(rename = "private")]
     Private,
@@ -40,6 +43,7 @@ pub enum Acl {
 impl fmt::Display for Acl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
         let value = match self {
+            Acl::Default => "default",
             Acl::Private => "private",
             Acl::PublicRead => "public-read",
             Acl::PublicReadWrite => "public-read-write",

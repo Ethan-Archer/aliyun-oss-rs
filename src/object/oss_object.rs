@@ -1,9 +1,10 @@
 use super::{
     del_object::DelObject, AbortUpload, AppendObject, CompleteUpload, CopyObject, CopyToPart,
-    GetObject, GetObjectMeta, GetObjectTagging, GetObjectUrl, HeadObject, InitUpload, ListParts,
-    PutObject, RestoreObject, UploadPart,
+    DelObjectTagging, GetObject, GetObjectAcl, GetObjectMeta, GetObjectTagging, GetObjectUrl,
+    HeadObject, InitUpload, ListParts, PutObject, PutObjectAcl, PutObjectTagging, RestoreObject,
+    UploadPart,
 };
-use crate::request::Oss;
+use crate::{common::Acl, request::Oss};
 
 /// OSS文件，实现了上传文件、删除文件等API
 #[derive(Debug, Clone)]
@@ -44,6 +45,10 @@ impl OssObject {
     pub fn get_object_meta(&self) -> GetObjectMeta {
         GetObjectMeta::new(self.oss.clone())
     }
+    /// 获取文件的ACL信息
+    pub fn get_object_acl(&self) -> GetObjectAcl {
+        GetObjectAcl::new(self.oss.clone())
+    }
     /// 获取文件内容
     pub fn get_object(&self) -> GetObject {
         GetObject::new(self.oss.clone())
@@ -55,6 +60,21 @@ impl OssObject {
     /// 解冻文件
     pub fn restore_object(&self) -> RestoreObject {
         RestoreObject::new(self.oss.clone())
+    }
+    /// 设置文件ACL
+    pub fn put_object_acl(&self, acl: Acl) -> PutObjectAcl {
+        PutObjectAcl::new(self.oss.clone(), acl)
+    }
+    /// 设置文件标签
+    pub fn put_object_tagging(
+        &self,
+        tags: Vec<(impl ToString, impl ToString)>,
+    ) -> PutObjectTagging {
+        PutObjectTagging::new(self.oss.clone(), tags)
+    }
+    /// 清空文件标签
+    pub fn del_object_tagging(&self) -> DelObjectTagging {
+        DelObjectTagging::new(self.oss.clone())
     }
     /// 初始化分片上传
     pub fn multipart_init_upload(&self) -> InitUpload {
