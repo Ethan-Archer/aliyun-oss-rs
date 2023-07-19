@@ -26,12 +26,6 @@ impl CopyObject {
             tags: HashMap::new(),
         }
     }
-    /// 设置来源文件的版本id
-    pub fn set_suorce_version_id(mut self, version_id: impl ToString) -> Self {
-        self.req
-            .insert_header("x-oss-copy-source-version-id", version_id);
-        self
-    }
     /// 设置文件的访问权限
     pub fn set_acl(mut self, acl: Acl) -> Self {
         self.req.insert_header("x-oss-object-acl", acl);

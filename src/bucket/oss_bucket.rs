@@ -1,4 +1,6 @@
-use super::{DelBucket, DelObjects, GetBucketInfo, GetBucketStat, ListObjects, PutBucket};
+use super::{
+    DelBucket, DelObjects, GetBucketInfo, GetBucketStat, ListObjects, ListUploads, PutBucket,
+};
 use crate::{request::Oss, OssObject};
 
 /// OSS存储空间，实现了新建存储空间、获取存储空间信息、文件列表等API
@@ -47,5 +49,9 @@ impl OssBucket {
     /// 查询存储空间的存储容量和文件数量
     pub fn del_objects(&self, files: Vec<impl ToString>) -> DelObjects {
         DelObjects::new(self.oss.clone(), files)
+    }
+    /// 查询已初始化但尚未完成的分片信息
+    pub fn multipart_list_uploads(&self) -> ListUploads {
+        ListUploads::new(self.oss.clone())
     }
 }

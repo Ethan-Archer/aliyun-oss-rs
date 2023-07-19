@@ -17,8 +17,6 @@ use tokio_util::io::ReaderStream;
 ///
 /// 默认情况下，如果已存在同名Object且对该Object有访问权限，则新添加的Object将覆盖原有的Object
 ///
-/// 在开启版本控制的情况下，上传文件和删除文件的逻辑都变得复杂，建议详细阅读阿里云官方文档
-///
 /// 具体详情查阅 [阿里云官方文档](https://help.aliyun.com/document_detail/31978.html)
 pub struct PutObject {
     req: OssRequest,
@@ -147,8 +145,8 @@ impl PutObject {
         let file = File::open(file.to_string()).await?;
         //读取文件大小
         let file_size = file.metadata().await?.len();
-        if file_size >= 5_000_000_000 {
-            return Err(Error::FileTooBig);
+        if file_size >= 5_368_709_120 {
+            return Err(Error::InvalidFileSize);
         }
         //初始化文件内容读取数据流
         let buf = BufReader::with_capacity(131072, file);
@@ -222,8 +220,8 @@ impl PutObject {
         }
         //读取大小
         let content_size = content.len() as u64;
-        if content_size >= 5_000_000_000 {
-            return Err(Error::FileTooBig);
+        if content_size >= 5_368_709_120 {
+            return Err(Error::InvalidFileSize);
         }
         self.req.insert_header(header::CONTENT_LENGTH, content_size);
         //插入body

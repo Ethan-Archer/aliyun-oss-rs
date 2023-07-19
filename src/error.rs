@@ -9,8 +9,8 @@ pub enum Error {
     IoError(#[from] std::io::Error),
     #[error("不支持网络路径")]
     PathNotSupported,
-    #[error("文件大小超过5GB，请使用MultipartUpload接口")]
-    FileTooBig,
+    #[error("文件大小不符合要求")]
+    InvalidFileSize,
     #[error("{0}")]
     HttpError(#[from] hyper::http::Error),
     #[error("{0}")]

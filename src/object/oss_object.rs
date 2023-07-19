@@ -1,6 +1,7 @@
 use super::{
-    del_object::DelObject, AppendObject, CopyObject, GetObject, GetObjectMeta, GetObjectTagging,
-    GetObjectUrl, HeadObject, PutObject, RestoreObject,
+    del_object::DelObject, AbortUpload, AppendObject, CompleteUpload, CopyObject, CopyToPart,
+    GetObject, GetObjectMeta, GetObjectTagging, GetObjectUrl, HeadObject, InitUpload, ListParts,
+    PutObject, RestoreObject, UploadPart,
 };
 use crate::request::Oss;
 
@@ -54,5 +55,34 @@ impl OssObject {
     /// 解冻文件
     pub fn restore_object(&self) -> RestoreObject {
         RestoreObject::new(self.oss.clone())
+    }
+    /// 初始化分片上传
+    pub fn multipart_init_upload(&self) -> InitUpload {
+        InitUpload::new(self.oss.clone())
+    }
+    /// 上传分片
+    pub fn multipart_upload_part(&self, part_number: u32, upload_id: impl ToString) -> UploadPart {
+        UploadPart::new(self.oss.clone(), part_number, upload_id)
+    }
+    /// 复制文件内容到分片
+    pub fn multipart_copy_part(
+        &self,
+        part_number: u32,
+        upload_id: impl ToString,
+        copy_source: impl ToString,
+    ) -> CopyToPart {
+        CopyToPart::new(self.oss.clone(), part_number, upload_id, copy_source)
+    }
+    /// 完成分片上传
+    pub fn multipart_complete_upload(&self, upload_id: impl ToString) -> CompleteUpload {
+        CompleteUpload::new(self.oss.clone(), upload_id)
+    }
+    /// 取消分片上传
+    pub fn multipart_abort_upload(&self, upload_id: impl ToString) -> AbortUpload {
+        AbortUpload::new(self.oss.clone(), upload_id)
+    }
+    /// 列举指定Upload ID所属的所有已经上传成功Part
+    pub fn multipart_list_parts(&self, upload_id: impl ToString) -> ListParts {
+        ListParts::new(self.oss.clone(), upload_id)
     }
 }

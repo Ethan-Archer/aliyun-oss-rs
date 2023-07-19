@@ -151,8 +151,8 @@ impl AppendObject {
         let file = File::open(file.to_string()).await?;
         //读取文件大小
         let file_size = file.metadata().await?.len();
-        if file_size >= 5_000_000_000 {
-            return Err(Error::FileTooBig);
+        if file_size >= 5_368_709_120 {
+            return Err(Error::InvalidFileSize);
         }
         self.req.insert_header(header::CONTENT_LENGTH, file_size);
         //初始化文件内容读取数据流
@@ -193,8 +193,8 @@ impl AppendObject {
     pub async fn send_content(mut self, content: Vec<u8>) -> Result<Option<String>, Error> {
         //读取文件大小
         let content_size = content.len();
-        if content_size >= 5_000_000_000 {
-            return Err(Error::FileTooBig);
+        if content_size >= 5_368_709_120 {
+            return Err(Error::InvalidFileSize);
         }
         self.req.insert_header(header::CONTENT_LENGTH, content_size);
         //生成文件类型

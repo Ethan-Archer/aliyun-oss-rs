@@ -46,32 +46,37 @@ let url = object.get_url().url(date);
 
 ### 已实现接口
 
-<details open>
-<summary>基础操作</summary>
+- 基础操作
 
-- <input type="checkbox" checked disabled> 列举存储空间列表 (ListBuckets)
-- <input type="checkbox" checked disabled> 列举 OSS 开服地域信息 (DescribeRegions)
+  - [x] 列举存储空间列表 (ListBuckets)
+  - [x] 列举 OSS 开服地域信息 (DescribeRegions)
 
-<summary>存储空间管理</summary>
+- 存储空间管理
 
-- <input type="checkbox" checked disabled> 新建存储空间 (PutBucket)
-- <input type="checkbox" checked disabled> 删除存储空间 (DeleteBucket)
-- <input type="checkbox" checked disabled> 列举存储空间内文件列表 (ListObjectsV2)
-- <input type="checkbox" checked disabled> 获取存储空间基本信息 (GetBucketInfo)
-- <input type="checkbox" checked disabled> 获取存储空间统计信息 (GetBucketStat)
-- <input type="checkbox" checked disabled> 批量删除文件 (DeleteMultipleObjects)
+  - [x] 新建存储空间 (PutBucket)
+  - [x] 删除存储空间 (DeleteBucket)
+  - [x] 列举存储空间内文件列表 (ListObjectsV2)
+  - [x] 获取存储空间基本信息 (GetBucketInfo)
+  - [x] 获取存储空间统计信息 (GetBucketStat)
+  - [x] 批量删除文件 (DeleteMultipleObjects)
+  - [x] 列举未完成的分片上传事件 (ListMultipartUploads)
 
-<summary>文件管理</summary>
+- 文件管理
 
-- <input type="checkbox" checked disabled> 上传文件 (PutObject)
-- <input type="checkbox" checked disabled> 下载文件 (GetObject)
-- <input type="checkbox" checked disabled> 复制文件 (CopyObject)
-- <input type="checkbox" checked disabled> 追加文件 (AppendObject)
-- <input type="checkbox" checked disabled> 删除文件 (DeleteObject)
-- <input type="checkbox" checked disabled> 解冻文件 (RestoreObject)
-- <input type="checkbox" checked disabled> 获取文件元信息 (HeadObject)
-- <input type="checkbox" checked disabled> 获取文件元信息 (GetObjectMeta)
-- <input type="checkbox" checked disabled> 获取文件访问地址 (GetObjectUrl)
-- <input type="checkbox" checked disabled> 获取文件标签信息 (GetObjectTagging)
-
-</details>
+  - [x] 上传文件 (PutObject)
+  - [x] 下载文件 (GetObject)
+  - [x] 复制文件 (CopyObject)
+  - [x] 追加文件 (AppendObject)
+  - [x] 删除文件 (DeleteObject)
+  - [x] 解冻文件 (RestoreObject)
+  - [x] 获取文件元信息 (HeadObject)
+  - [x] 获取文件元信息 (GetObjectMeta)
+  - [x] 获取文件访问地址 (GetObjectUrl)
+  - [x] 获取文件标签信息 (GetObjectTagging)
+  - [x] 文件分片上传 (MultipartUpload)
+    - [x] 初始化分片上传事件 (InitiateMultipartUpload)
+    - [x] 上传分片 (UploadPart)
+    - [x] 复制文件内容到分片 (UploadPartCopy)
+    - [x] 完成分片上传 (CompleteMultipartUpload)
+    - [x] 取消分片上传事件 (AbortMultipartUpload)
+    - [x] 列举已上传的分片 (ListParts)

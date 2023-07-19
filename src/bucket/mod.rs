@@ -4,13 +4,15 @@
 pub use self::oss_bucket::OssBucket;
 pub use self::{
     del_bucket::DelBucket, del_objects::DelObjects, get_bucket_info::GetBucketInfo,
-    get_bucket_stat::GetBucketStat, list_objects::ListObjects, put_bucket::PutBucket,
+    get_bucket_stat::GetBucketStat, list_multipart_uploads::ListUploads, list_objects::ListObjects,
+    put_bucket::PutBucket,
 };
 
 mod del_bucket;
 mod del_objects;
 mod get_bucket_info;
 mod get_bucket_stat;
+mod list_multipart_uploads;
 mod list_objects;
 mod oss_bucket;
 mod put_bucket;

@@ -411,7 +411,6 @@ impl OssRequest {
             req = req.header(key, value);
         }
         let request = req.body(self.body)?;
-        println!("{:#?}", request);
         if self.oss.enable_https {
             let client = Client::builder().build::<_, hyper::Body>(HttpsConnector::new());
             Ok(client.request(request))
